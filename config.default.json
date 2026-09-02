@@ -1,0 +1,15 @@
+{
+  "assistant_name": "EI",
+  "user_name": "Monsieur",
+  "user_city": "Paris",
+  "wake_words": ["ei", "jarvis", "assistant"],
+  "voice": "fr-FR-HenriNeural",
+  "preferred_brain": "gemini",
+  "mic_device_index": null,
+  "mic_sensitivity_rms": 0.015,
+  "silence_duration_sec": 1.2,
+  "max_phrase_sec": 15,
+  "sound_feedback": true,
+  "orb_theme": "cyber_blue",
+  "auto_listen": true
+}

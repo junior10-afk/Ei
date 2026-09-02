@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EI - Assistant Vocal & HUD 3D</title>
+    <script type="module" crossorigin src="/assets/index-Jbvt3Gzn.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CRdVHUUS.css">
+  </head>
+  <body>
+    <!-- Container Canvas Three.js pour l'Orbe 3D -->
+    <div id="orb-container"></div>
+
+    <!-- En-tête HUD -->
+    <header class="hud-header">
+      <div class="hud-brand">
+        <div class="hud-logo-icon"></div>
+        <div class="hud-title">EI CORE</div>
+        <div class="hud-version">v2.0 HUD</div>
+      </div>
+
+      <div class="hud-controls">
+        <button id="toggle-chat-btn" class="hud-btn">💬 Historique</button>
+        <button id="toggle-settings-btn" class="hud-btn">⚙️ Réglages</button>
+      </div>
+
+      <div class="hud-status-badge">
+        <div class="status-dot"></div>
+        <span id="status-text">Initialisation...</span>
+      </div>
+    </header>
+
+    <!-- Zone centrale de Sous-titres & Transcription -->
+    <main class="hud-center-caption">
+      <div id="speech-transcript" class="speech-transcript">« En attente d'une commande ou du mot d'activation... »</div>
+      <div id="speech-subtitle" class="speech-subtitle"></div>
+    </main>
+
+    <!-- Barre inférieure de contrôle & saisie -->
+    <footer class="hud-bottom-bar">
+      <button id="mic-toggle-btn" class="hud-btn mic-btn active">🎤 Micro Actif</button>
+      <button id="stop-speech-btn" class="hud-btn stop-btn">⏹️ Couper</button>
+
+      <input
+        id="user-text-input"
+        type="text"
+        class="hud-input"
+        placeholder="Parlez au micro ou tapez un ordre (ex: 'Ouvre chrome', 'Météo Paris')..."
+      />
+
+      <div style="display: flex; gap: 8px;">
+        <button class="hud-btn quick-action-btn" data-cmd="Quelle heure est-il ?">🕒 Heure</button>
+        <button class="hud-btn quick-action-btn" data-cmd="Quel temps fait-il à Paris ?">⛅ Météo</button>
+        <button class="hud-btn quick-action-btn" data-cmd="Ouvre le bloc-notes">📝 Notes</button>
+      </div>
+    </footer>
+
+    <!-- Panneau Flottant : Console / Chat -->
+    <div id="chat-panel" class="hud-panel hidden">
+      <div class="hud-panel-header">
+        <span>Console & Journal</span>
+        <button id="close-chat-btn" class="hud-panel-close">✕</button>
+      </div>
+      <div id="chat-messages" class="hud-panel-body chat-messages">
+        <!-- Messages injectés dynamiquement -->
+      </div>
+    </div>
+
+    <!-- Panneau Flottant : Réglages -->
+    <div id="settings-panel" class="hud-panel hidden">
+      <div class="hud-panel-header">
+        <span>Paramètres Système</span>
+        <button id="close-settings-btn" class="hud-panel-close">✕</button>
+      </div>
+      <div class="hud-panel-body">
+        <div class="setting-item">
+          <label class="setting-label">Nom de l'utilisateur :</label>
+          <input id="setting-user-name" type="text" class="setting-input" value="Monsieur" />
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Ville de référence :</label>
+          <input id="setting-city" type="text" class="setting-input" value="Paris" />
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Voix de synthèse (Edge-TTS) :</label>
+          <select id="setting-voice" class="setting-input">
+            <option value="fr-FR-HenriNeural">Henri (Français)</option>
+            <option value="fr-FR-DeniseNeural">Denise (Français)</option>
+            <option value="fr-FR-VivienneMultilingualNeural">Vivienne (Multilingue)</option>
+          </select>
+        </div>
+        <button id="save-settings-btn" class="hud-btn" style="width: 100%; justify-content: center; margin-top: 10px;">
+          Enregistrer
+        </button>
+      </div>
+    </div>
+
+  </body>
+</html>
