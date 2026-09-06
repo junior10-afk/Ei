@@ -12,6 +12,7 @@ sys.path.insert(0, str(BASE_DIR))
 from core.config import config
 from core.state import state_manager, AssistantState
 from core.bus import bus
+from core.utils import free_ports, play_chime
 from voice.tts import tts_engine
 from voice.mic import mic_listener
 from brain.dispatcher import dispatcher
@@ -60,13 +61,17 @@ def main():
     print(f"   Démarrage de {config.get('assistant_name', 'EI')} - Runtime Vocal & HUD")
     print("=" * 60)
 
+    # 0. Libération des ports pour éviter les conflits au boot (8765 / 5173)
+    vite_port = int(os.getenv("VITE_PORT", "5173"))
+    ws_port = config.ws_port
+    free_ports([ws_port, vite_port])
+
     setup_ws_handlers()
 
     # Relier le microphone au dispatcher
     mic_listener.on_speech_recognized = lambda text: dispatcher.process_text_input(text, is_voice=True)
 
     # 1. Démarrer le serveur Web statique pour le frontend HUD
-    vite_port = int(os.getenv("VITE_PORT", "5173"))
     serve_static(port=vite_port)
 
     # 2. Démarrer la boucle asyncio pour le WebSocket dans un thread séparé
@@ -82,6 +87,26 @@ def main():
 
     ws_thread = threading.Thread(target=run_ws_loop, daemon=True)
     ws_thread.start()
+
+    # 2.b Télémétrie CPU/RAM pour le HUD central
+    import psutil
+    def broadcast_stats_loop():
+        time.sleep(2)
+        while True:
+            try:
+                cpu = psutil.cpu_percent(interval=1.0)
+                ram = psutil.virtual_memory().percent
+                bus.broadcast_threadsafe({
+                    "type": "system_stats",
+                    "cpu": cpu,
+                    "ram": ram
+                })
+            except Exception:
+                pass
+            time.sleep(1.0)
+
+    stats_thread = threading.Thread(target=broadcast_stats_loop, daemon=True)
+    stats_thread.start()
 
     # 3. Démarrer l'écoute micro
     if config.get("auto_listen", True):

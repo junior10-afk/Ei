@@ -12,3 +12,4 @@ psutil>=5.9.0
 pywebview>=5.0.0
 google-genai>=1.0.0
 openai>=1.0.0
+pycaw>=20240210

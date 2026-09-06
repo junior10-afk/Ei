@@ -76,7 +76,9 @@ Ei/
 │   ├── weather.py            # Météo temps réel Open-Meteo
 │   ├── files.py              # Explorateur de fichiers Windows
 │   ├── memory.py             # Mémorisation & rappel de souvenirs persistants
-│   └── home_assistant.py     # Contrôle domotique optionnel
+│   ├── home_assistant.py     # Contrôle domotique optionnel
+│   ├── timer.py              # Minuteur HUD temps réel avec sonnerie et widget
+│   └── panels.py             # Commande vocale d'affichage des panneaux
 │
 ├── ui_host/                  # Hébergement du HUD
 │   ├── window.py             # Fenêtre native PyWebView (WebView2)
@@ -87,9 +89,10 @@ Ei/
     ├── index.html            # Pupitre HUD cyberpunk
     └── src/
         ├── main.ts           # Client WebSocket & gestionnaire d'événements
-        ├── orb.ts            # Orbe Three.js réactif aux états & volume sonore
+        ├── orb.ts            # Moteur Three.js particules, plexus, noyau & audio
+        ├── orb_presets.ts    # Définition des 22 presets unifiés & palettes
         ├── style.css         # Styling cyberpunk / Iron Man dark
-        └── panels/           # Composants UI (Chat, Réglages, Actions)
+        └── panels/           # Composants UI (Chat, Réglages, Minuteur, Galerie Orbes)
 ```
 
 ---
@@ -100,9 +103,14 @@ Ei/
 - **Salutations & Identité :** *"Bonjour"*, *"Qui es-tu ?"*, *"Merci"*
 - **Heure & Date :** *"Quelle heure est-il ?"*, *"Quel jour on est ?"*
 - **Calculs :** *"Calcule 15 * 8"*, *"Combien font 124 plus 36 ?"*
+- **Galerie & Orbes 3D :** *"Ouvre la galerie des orbes"*, *"Mets l'orbe Arc Reactor"*, *"Mets l'orbe Gargantua"*, *"Mets l'orbe Matrix"*, *"Mets l'orbe Tesla"* (22 presets disponibles)
+- **Minuteur HUD :** *"Mets un minuteur de 5 minutes"*, *"Minuteur de 30 secondes"*, *"Annule le minuteur"*
+- **Panneaux HUD :** *"Ouvre les paramètres"*, *"Ferme les réglages"*, *"Affiche la console"*, *"Masque l'historique"*
 - **Applications :** *"Ouvre Chrome"*, *"Ouvre le bloc-notes"*, *"Ouvre la calculatrice"*, *"Lance YouTube"*
 - **Volume :** *"Mets le volume à 50"*, *"Règle le volume à 80"*
 - **Météo :** *"Quel temps fait-il ?"*, *"Météo à Paris"*
 - **Dossiers :** *"Ouvre le dossier Bureau"*, *"Ouvre les téléchargements"*
 - **Mémoire :** *"Mémorise que mon code d'entrée est 4242"*, *"Quel est mon code d'entrée ?"*
 - **Arrêt immédiat :** *"Silence"*, *"Stop"*, *"Tais-toi"*
+
+

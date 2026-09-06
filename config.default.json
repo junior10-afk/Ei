@@ -11,5 +11,6 @@
   "max_phrase_sec": 15,
   "sound_feedback": true,
   "orb_theme": "cyber_blue",
+  "orb_animation": "plasma",
   "auto_listen": true
 }

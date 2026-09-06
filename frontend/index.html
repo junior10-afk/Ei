@@ -7,68 +7,302 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <!-- Container Canvas Three.js pour l'Orbe 3D -->
+    <!-- Container Canvas Three.js pour l'Orbe 3D de Particules -->
     <div id="orb-container"></div>
 
-    <!-- En-tête HUD -->
-    <header class="hud-header">
-      <div class="hud-brand">
-        <div class="hud-logo-icon"></div>
-        <div class="hud-title">EI CORE</div>
-        <div class="hud-version">v2.0 HUD</div>
+    <!-- ══ HORLOGE & TÉLÉMÉTRIE CENTRALE — Iron Man HUD ══════════════════════ -->
+    <div id="orb-clock-hud">
+      <div class="hud-corner hud-tl"></div>
+      <div class="hud-corner hud-tr"></div>
+      <div class="hud-corner hud-bl"></div>
+      <div class="hud-corner hud-br"></div>
+      <div class="hud-prefix">◈ LOCAL_TIME // TELEMETRY</div>
+      <div class="hud-clock-row">
+        <div id="cpu-hud" class="stat-hud" title="Charge Processeur">
+          <span class="stat-label">CPU</span>
+          <span id="cpu-value" class="stat-value">--%</span>
+        </div>
+        <div id="orb-time-display">--:--:--</div>
+        <div id="ram-hud" class="stat-hud" title="Utilisation Mémoire RAM">
+          <span class="stat-label">RAM</span>
+          <span id="ram-value" class="stat-value">--%</span>
+        </div>
       </div>
-
-      <div class="hud-controls">
-        <button id="toggle-chat-btn" class="hud-btn">💬 Historique</button>
-        <button id="toggle-settings-btn" class="hud-btn">⚙️ Réglages</button>
-      </div>
-
-      <div class="hud-status-badge">
-        <div class="status-dot"></div>
-        <span id="status-text">Initialisation...</span>
-      </div>
-    </header>
-
-    <!-- Zone centrale de Sous-titres & Transcription -->
-    <main class="hud-center-caption">
-      <div id="speech-transcript" class="speech-transcript">« En attente d'une commande ou du mot d'activation... »</div>
-      <div id="speech-subtitle" class="speech-subtitle"></div>
-    </main>
-
-    <!-- Barre inférieure de contrôle & saisie -->
-    <footer class="hud-bottom-bar">
-      <button id="mic-toggle-btn" class="hud-btn mic-btn active">🎤 Micro Actif</button>
-      <button id="stop-speech-btn" class="hud-btn stop-btn">⏹️ Couper</button>
-
-      <input
-        id="user-text-input"
-        type="text"
-        class="hud-input"
-        placeholder="Parlez au micro ou tapez un ordre (ex: 'Ouvre chrome', 'Météo Paris')..."
-      />
-
-      <div style="display: flex; gap: 8px;">
-        <button class="hud-btn quick-action-btn" data-cmd="Quelle heure est-il ?">🕒 Heure</button>
-        <button class="hud-btn quick-action-btn" data-cmd="Quel temps fait-il à Paris ?">⛅ Météo</button>
-        <button class="hud-btn quick-action-btn" data-cmd="Ouvre le bloc-notes">📝 Notes</button>
-      </div>
-    </footer>
-
-    <!-- Panneau Flottant : Console / Chat -->
-    <div id="chat-panel" class="hud-panel hidden">
-      <div class="hud-panel-header">
-        <span>Console & Journal</span>
-        <button id="close-chat-btn" class="hud-panel-close">✕</button>
-      </div>
-      <div id="chat-messages" class="hud-panel-body chat-messages">
-        <!-- Messages injectés dynamiquement -->
+      <div class="hud-labels">
+        <span class="hud-lbl">SYS_CLOCK</span>
+        <span id="orb-date-display">--/--/----</span>
+        <span class="hud-lbl">ONLINE</span>
       </div>
     </div>
 
-    <!-- Panneau Flottant : Réglages -->
+    <!-- ══ INFOS HAUT GAUCHE & CONSEIL ═════════════════════════════════════ -->
+    <div id="user-tip">
+      <span class="tip-tag">PROMPT ›</span> Demandez : « Quelle heure est-il ? » &bull; « Météo Paris » &bull; « Minuteur 5m »
+    </div>
+
+    <!-- ══ CONTRÔLES HAUT DROITE (Connexion, Plein Écran, Menu) ════════════ -->
+    <div class="hud-top-right">
+      <div id="connection-badge" class="disconnected">
+        <div id="connection-dot"></div>
+        <span id="connection-label">Reconnexion</span>
+      </div>
+      <button id="fullscreen-btn" title="Plein écran">⛶</button>
+      <button id="jarvis-menu-btn" title="Menu système">◈ MENU</button>
+    </div>
+
+    <!-- ══ MENU DÉROULANT UNIFIÉ — Iron Man HUD ════════════════════════════ -->
+    <div id="jarvis-menu-dropdown" class="hidden">
+      <div class="dropdown-scanlines"></div>
+      <div class="dropdown-corner tl"></div>
+      <div class="dropdown-corner tr"></div>
+      <div class="dropdown-corner bl"></div>
+      <div class="dropdown-corner br"></div>
+      <div class="dropdown-header">◈ CONTROLES_SYSTEME // MENU</div>
+      <div class="dropdown-sections">
+        <div class="dropdown-section">
+          <div class="section-title">INTELLIGENCE ARTIFICIELLE & ORBE</div>
+          <div class="section-buttons">
+            <button id="menu-btn-orbs" class="menu-action-btn highlight-btn">
+              <span class="btn-icon">🔮</span> SÉLECTION ORBE (22 PRESETS)
+            </button>
+            <button id="menu-btn-theme" class="menu-action-btn">
+              <span class="btn-icon">🎨</span> PARAMÈTRES GRAPHIQUES
+            </button>
+          </div>
+        </div>
+        <div class="dropdown-section">
+          <div class="section-title">OUTILS SYSTÈME</div>
+          <div class="section-buttons">
+            <button id="menu-btn-commands" class="menu-action-btn">
+              <span class="btn-icon">📋</span> RÉPERTOIRE COMMANDES
+            </button>
+            <button id="menu-btn-chat" class="menu-action-btn">
+              <span class="btn-icon">💬</span> CONSOLE / JOURNAL
+            </button>
+            <button id="menu-btn-settings" class="menu-action-btn">
+              <span class="btn-icon">⚙️</span> PARAMÈTRES HUD
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TRANSCRIPTION UTILISATEUR — Style Ambre ═════════════════════════ -->
+    <div id="user-speech-hud" class="hidden">
+      <div id="user-speech-box">
+        <div class="speech-scanlines"></div>
+        <div class="speech-corner corner-tl"></div>
+        <div class="speech-corner corner-tr"></div>
+        <div class="speech-corner corner-bl"></div>
+        <div class="speech-corner corner-br"></div>
+        <span class="speech-prefix">VOUS ›</span>
+        <div id="user-speech-text"></div>
+        <div id="user-speech-cursor"></div>
+      </div>
+    </div>
+
+    <!-- ══ SOUS-TITRES ASSISTANT — Style Cyan Cyber ════════════════════════ -->
+    <div id="subtitle-hud" class="hidden">
+      <div id="subtitle-box">
+        <div class="subtitle-scanlines"></div>
+        <div class="subtitle-corner corner-tl"></div>
+        <div class="subtitle-corner corner-tr"></div>
+        <div class="subtitle-corner corner-bl"></div>
+        <div class="subtitle-corner corner-br"></div>
+        <div id="subtitle-text"></div>
+        <div id="subtitle-cursor"></div>
+      </div>
+      <div class="subtitle-meta-row">
+        <span>SYNC_TERMINAL_V2.5</span>
+        <span id="subtitle-meta">DECRYPTING_RESPONSE...</span>
+      </div>
+    </div>
+
+    <!-- ══ STATUT VOCAL CENTRÉ ════════════════════════════════════════════ -->
+    <div id="status-text">en veille</div>
+
+    <!-- ══ DECK DE CONTRÔLE INFÉRIEUR ═════════════════════════════════════ -->
+    <footer class="hud-controls-deck">
+      <button id="keyboard-toggle-btn" class="hud-round-btn" title="Ouvrir le terminal clavier (Entrée / K)">
+        ⌨️
+      </button>
+
+      <button id="mic-btn" class="hud-round-btn mic-btn active" title="Activer / Couper le micro">
+        <svg viewBox="0 0 24 24" fill="none" class="mic-svg">
+          <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor"/>
+          <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="9" y1="22" x2="15" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <button id="stop-speech-btn" class="hud-round-btn stop-btn" title="Interrompre la parole (TTS)">
+        ⏹️
+      </button>
+    </footer>
+
+    <!-- Filigrane système inférieur -->
+    <div id="assistant-label">EI CORE // HUD SYSTEM V2.5</div>
+
+    <!-- ══ TERMINAL DE SAISIE CLAVIER DIRECT (OVERRIDE) ═══════════════════ -->
+    <div id="keyboard-hud" class="hidden">
+      <div class="keyboard-hud-box">
+        <div class="keyboard-hud-header">
+          <span>DIRECT_INPUT_OVERRIDE</span>
+          <div class="keyboard-hud-status">
+            <span>AWAITING_COMMAND...</span>
+            <span id="keyboard-close" title="Fermer (Esc)">✕</span>
+          </div>
+        </div>
+        <input
+          type="text"
+          id="keyboard-input"
+          placeholder="ENTREZ VOTRE ORDRE OU QUESTION..."
+          autocomplete="off"
+        />
+      </div>
+    </div>
+
+    <!-- ══ MINUTEUR GÉANT PLEIN ÉCRAN — Iron Man HUD ══════════════════════ -->
+    <div id="timer-hud" class="hidden">
+      <div id="timer-display">00:00</div>
+      <div class="timer-protocol-label">PROTOCOL MINUTEUR ACTIF</div>
+      <div class="timer-bar-wrap">
+        <div id="timer-progress"></div>
+      </div>
+      <button id="timer-hud-cancel" class="timer-hud-cancel-btn">✕ ANNULER LE MINUTEUR</button>
+    </div>
+
+    <!-- ══ RÉPERTOIRE DES COMMANDES VOCALES ═══════════════════════════════ -->
+    <div id="commands-panel" class="hidden">
+      <div class="commands-overlay" id="commands-overlay"></div>
+      <div class="commands-modal">
+        <div class="commands-header">
+          <div class="commands-title">◈ EI // RÉPERTOIRE DES COMMANDES VOCALES</div>
+          <span id="commands-close" class="commands-close-btn" title="Fermer">✕</span>
+        </div>
+        <div class="commands-search-wrap">
+          <input
+            id="commands-search"
+            type="text"
+            placeholder="🔍 RECHERCHER UNE COMMANDE (ex: heure, météo, notes, minuteur, volume)..."
+            autocomplete="off"
+          />
+        </div>
+        <div id="commands-body" class="commands-body">
+          <div class="cmd-category">
+            <div class="cmd-cat-title">💬 COMMANDES GÉNÉRALES &amp; SYSTÈME</div>
+            <div class="cmd-grid">
+              <div class="cmd-item" data-cmd="Quelle heure est-il ?"><span class="cmd-text">« Quelle heure est-il ? »</span><span class="cmd-desc">Heure locale en direct</span></div>
+              <div class="cmd-item" data-cmd="Quelle est la date d'aujourd'hui ?"><span class="cmd-text">« Quelle est la date ? »</span><span class="cmd-desc">Date complète du jour</span></div>
+              <div class="cmd-item" data-cmd="Raconte-moi une blague"><span class="cmd-text">« Raconte-moi une blague »</span><span class="cmd-desc">Blague instantanée</span></div>
+              <div class="cmd-item" data-cmd="Calcule 45 * 12"><span class="cmd-text">« Calcule [opération] »</span><span class="cmd-desc">Calcul mathématique instantané</span></div>
+              <div class="cmd-item" data-cmd="Tais-toi"><span class="cmd-text">« Silence / Tais-toi / Stop »</span><span class="cmd-desc">Coupe immédiatement la voix</span></div>
+            </div>
+          </div>
+
+          <div class="cmd-category">
+            <div class="cmd-cat-title">🔮 ORBES 3D &amp; PERSONNALISATION</div>
+            <div class="cmd-grid">
+              <div class="cmd-item" data-cmd="Affiche la galerie des orbes"><span class="cmd-text">« Ouvre la galerie des orbes »</span><span class="cmd-desc">Affiche les 22 presets 3D disponibles</span></div>
+              <div class="cmd-item" data-cmd="Mets l'orbe Arc Reactor"><span class="cmd-text">« Mets l'orbe Arc Reactor »</span><span class="cmd-desc">Active le réacteur Stark</span></div>
+              <div class="cmd-item" data-cmd="Mets l'orbe Gargantua"><span class="cmd-text">« Mets l'orbe Gargantua »</span><span class="cmd-desc">Active le trou noir relativiste</span></div>
+              <div class="cmd-item" data-cmd="Mets l'orbe Matrix"><span class="cmd-text">« Mets l'orbe Matrix »</span><span class="cmd-desc">Active la pluie de code vert</span></div>
+              <div class="cmd-item" data-cmd="Mets l'orbe Tesla"><span class="cmd-text">« Mets l'orbe Tesla »</span><span class="cmd-desc">Active les éclairs haute tension</span></div>
+            </div>
+          </div>
+
+          <div class="cmd-category">
+            <div class="cmd-cat-title">⏱️ MINUTERIES &amp; GESTION DU TEMPS</div>
+            <div class="cmd-grid">
+              <div class="cmd-item" data-cmd="Mets un minuteur de 5 minutes"><span class="cmd-text">« Minuteur de [X] minutes »</span><span class="cmd-desc">Lance le minuteur HUD</span></div>
+              <div class="cmd-item" data-cmd="Annule le minuteur"><span class="cmd-text">« Annule le minuteur »</span><span class="cmd-desc">Arrête le compte à rebours</span></div>
+            </div>
+          </div>
+
+          <div class="cmd-category">
+            <div class="cmd-cat-title">⛅ MÉTÉO &amp; ENVIRONNEMENT</div>
+            <div class="cmd-grid">
+              <div class="cmd-item" data-cmd="Quel temps fait-il ?"><span class="cmd-text">« Quel temps fait-il ? »</span><span class="cmd-desc">Météo de votre ville configurée</span></div>
+              <div class="cmd-item" data-cmd="Météo à Tokyo"><span class="cmd-text">« Météo à [ville] »</span><span class="cmd-desc">Prévisions pour n'importe quelle ville</span></div>
+            </div>
+          </div>
+
+          <div class="cmd-category">
+            <div class="cmd-cat-title">💻 APPLICATIONS &amp; CONTRÔLE DU PC</div>
+            <div class="cmd-grid">
+              <div class="cmd-item" data-cmd="Ouvre le bloc-notes"><span class="cmd-text">« Ouvre le bloc-notes »</span><span class="cmd-desc">Lance Notepad Windows</span></div>
+              <div class="cmd-item" data-cmd="Ouvre la calculatrice"><span class="cmd-text">« Ouvre la calculatrice »</span><span class="cmd-desc">Calculatrice Windows</span></div>
+              <div class="cmd-item" data-cmd="Ouvre Chrome"><span class="cmd-text">« Ouvre Chrome »</span><span class="cmd-desc">Navigateur Google Chrome</span></div>
+              <div class="cmd-item" data-cmd="Mets le volume à 50%"><span class="cmd-text">« Volume à [N]% »</span><span class="cmd-desc">Règle le volume système</span></div>
+              <div class="cmd-item" data-cmd="Ouvre mon dossier téléchargements"><span class="cmd-text">« Ouvre mes téléchargements »</span><span class="cmd-desc">Explorateur de fichiers</span></div>
+            </div>
+          </div>
+
+          <div class="cmd-category">
+            <div class="cmd-cat-title">🧠 MÉMOIRE PERSISTANTE</div>
+            <div class="cmd-grid">
+              <div class="cmd-item" data-cmd="Retiens que ma couleur préférée est le bleu"><span class="cmd-text">« Retiens que [information] »</span><span class="cmd-desc">Enregistre une information</span></div>
+              <div class="cmd-item" data-cmd="Quelle est ma couleur préférée ?"><span class="cmd-text">« Rappelle-moi [clé] »</span><span class="cmd-desc">Rappelle une info mémorisée</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ GALERIE DES ORBES 3D UNIFIÉS ═════════════════════════════════════ -->
+    <div id="orbs-panel" class="hidden">
+      <div class="orbs-overlay" id="orbs-overlay"></div>
+      <div class="orbs-modal">
+        <div class="orbs-header">
+          <div class="orbs-title">◈ EI // GALERIE DES ORBES 3D (22 PRESETS)</div>
+          <span id="orbs-close" class="orbs-close-btn" title="Fermer (Échap)">✕</span>
+        </div>
+        <div class="orbs-search-wrap">
+          <input
+            id="orbs-search"
+            type="text"
+            placeholder="🔍 RECHERCHER UN ORBE (ex: Arc Reactor, Gargantua, HAL, Tesla, Tesseract, DNA...)..."
+            autocomplete="off"
+          />
+        </div>
+        <div class="orbs-filter-tabs">
+          <button class="orbs-filter-btn active" data-filter="all">TOUS (22)</button>
+          <button class="orbs-filter-btn" data-filter="Sci-Fi & IA">🤖 SCI-FI & IA</button>
+          <button class="orbs-filter-btn" data-filter="Cosmique & Espace">🌌 COSMIQUE</button>
+          <button class="orbs-filter-btn" data-filter="Énergie & Éléments">⚡ ÉNERGIE</button>
+          <button class="orbs-filter-btn" data-filter="Cyber & Géométrie">🕹️ CYBER & GÉO</button>
+          <button class="orbs-filter-btn" data-filter="Classique">🔷 CLASSIQUES</button>
+        </div>
+        <div id="orbs-grid" class="orbs-grid"></div>
+      </div>
+    </div>
+
+    <!-- ══ PANNEAU CONSOLE / JOURNAL ══════════════════════════════════════ -->
+    <div id="chat-panel" class="hud-panel hidden">
+      <div class="av-panel-scanlines"></div>
+      <div class="av-panel-corner-tr"></div>
+      <div class="av-panel-corner-bl"></div>
+      <div class="hud-panel-header" id="chat-panel-header">
+        <div class="panel-header-title">
+          <span class="dot-indicator"></span>
+          <span>CONSOLE // JOURNAL DES ÉVÉNEMENTS</span>
+        </div>
+        <button id="close-chat-btn" class="hud-panel-close">✕</button>
+      </div>
+      <div id="chat-messages" class="hud-panel-body chat-messages"></div>
+    </div>
+
+    <!-- ══ PANNEAU RÉGLAGES DU SYSTÈME ════════════════════════════════════ -->
     <div id="settings-panel" class="hud-panel hidden">
-      <div class="hud-panel-header">
-        <span>Paramètres Système</span>
+      <div class="av-panel-scanlines"></div>
+      <div class="av-panel-corner-tr"></div>
+      <div class="av-panel-corner-bl"></div>
+      <div class="hud-panel-header" id="settings-panel-header">
+        <div class="panel-header-title">
+          <span class="dot-indicator"></span>
+          <span>SYS_CONFIG // PARAMÈTRES HUD</span>
+        </div>
         <button id="close-settings-btn" class="hud-panel-close">✕</button>
       </div>
       <div class="hud-panel-body">
@@ -88,8 +322,72 @@
             <option value="fr-FR-VivienneMultilingualNeural">Vivienne (Multilingue)</option>
           </select>
         </div>
-        <button id="save-settings-btn" class="hud-btn" style="width: 100%; justify-content: center; margin-top: 10px;">
-          Enregistrer
+        <div class="setting-item">
+          <label class="setting-label">Preset de l'Orbe 3D (Physique & Couleurs) :</label>
+          <select id="setting-orb-preset" class="setting-input">
+            <optgroup label="Classiques">
+              <option value="cyber_blue">🔷 Cyan Cyber (Défaut)</option>
+              <option value="iron_man">🔴 Mark VII (Stark)</option>
+            </optgroup>
+            <optgroup label="Sci-Fi & IA">
+              <option value="arc_reactor">⚡ Arc Reactor MK-85</option>
+              <option value="hal_9000">👁️ HAL-9000 Sovereign</option>
+              <option value="cortana">💜 Cortana Hologram</option>
+              <option value="aperture">🔬 Aperture Optical Core</option>
+              <option value="tachikoma">🕸️ Tachikoma Cyber-Net</option>
+            </optgroup>
+            <optgroup label="Cosmique & Espace">
+              <option value="gargantua">🕳️ Gargantua (Singularité)</option>
+              <option value="pulsar">✨ Neutron Pulsar</option>
+              <option value="saturn_rings">🪐 Saturn Rings</option>
+              <option value="aurora">🌌 Aurora Borealis</option>
+              <option value="dark_matter">🌑 Dark Matter</option>
+            </optgroup>
+            <optgroup label="Énergie & Éléments">
+              <option value="solar_flare">☀️ Solar Flare</option>
+              <option value="tesla_coil">⚡ Tesla 100kV</option>
+              <option value="abyssal">🌊 Abyssal Biolum</option>
+              <option value="crystal">💎 Crystal Chronos</option>
+              <option value="radioactive">☢️ Rad-226 Isotope</option>
+            </optgroup>
+            <optgroup label="Cyber & Géométrie">
+              <option value="tesseract">🧊 Tesseract 4D</option>
+              <option value="dna_helix">🧬 Double Helix DNA</option>
+              <option value="neural_synapse">🧠 Neural Synapse</option>
+              <option value="synthwave">🕶️ Synthwave 84</option>
+              <option value="matrix_code">💾 Matrix Code Cascade</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Animation Physique (Surcharge) :</label>
+          <select id="setting-orb-animation" class="setting-input">
+            <option value="plasma">Plasma Solaire (Fluide / Fusion)</option>
+            <option value="vortex">Vortex Galactique (Trou Noir / Spirale)</option>
+            <option value="quantum">Ondes Quantiques (Choc & Fréquence)</option>
+            <option value="equalizer">Égaliseur 3D (Spectre Harmonique)</option>
+            <option value="rings">Anneaux Planétaires (Saturne)</option>
+            <option value="helix">Double Hélice (ADN Moléculaire)</option>
+            <option value="tesseract">Hypercube 4D (Perspective)</option>
+            <option value="tesla">Haute Tension (Arcs Tesla)</option>
+            <option value="crystal">Prisme Cristallin (Facettes)</option>
+            <option value="cascade">Pluie Numérique (Cascade Matrix)</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Qualité Graphique :</label>
+          <select id="setting-orb-quality" class="setting-input">
+            <option value="high">Haute (Défaut)</option>
+            <option value="medium">Moyenne</option>
+            <option value="low">Basse (Économie)</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Mots d'activation (séparés par virgule) :</label>
+          <input id="setting-wake-words" type="text" class="setting-input" value="ei, jarvis, assistant" />
+        </div>
+        <button id="save-settings-btn" class="hud-btn save-btn">
+          ENREGISTRER LES PARAMÈTRES
         </button>
       </div>
     </div>

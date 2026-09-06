@@ -60,13 +60,51 @@ class Dispatcher:
                 "params": {"key": memo_match.group(1).strip(), "value": memo_match.group(2).strip()}
             }
 
-        # 7. Rappeler une information
-        recall_match = re.search(r"(?:quel est mon|rappelle-moi|qu'est-ce que tu sais sur)\s+([a-zA-ZÀ-ÿ0-9\s]+)", clean)
-        if recall_match:
+        # 8. Minuteur / Timer
+        cancel_timer_match = re.search(r"(?:annule|supprime|arrête)\s+(?:le\s+|les\s+)?(?:minuteur|timer|compte à rebours)", clean)
+        if cancel_timer_match:
+            return {"action": "cancel_timer", "params": {}}
+
+        timer_match = re.search(r"(?:(?:mets|lance|programme|démarre)\s+(?:un\s+)?(?:minuteur|timer|compte à rebours)|minuteur|timer)\s+(?:de\s+)?(\d+)\s*(seconde|secondes|sec|minute|minutes|min|heure|heures|h)(?:\s+(?:pour|de|intitulé)\s+([a-zA-ZÀ-ÿ0-9\s]+))?", clean)
+        if timer_match:
+            dur = int(timer_match.group(1))
+            unit_str = timer_match.group(2)
+            label = timer_match.group(3).strip() if timer_match.group(3) else "Minuteur"
             return {
-                "action": "recall_fact",
-                "params": {"key": recall_match.group(1).strip()}
+                "action": "set_timer",
+                "params": {"duration": dur, "unit": unit_str, "label": label}
             }
+
+        # 9. Panneaux HUD (Paramètres / Historique / Orbes)
+        open_panel_match = re.search(r"(?:ouvre|affiche|montre)\s+(?:le\s+panneau\s+|les\s+|la\s+)?(paramètres|parametres|réglages|reglages|configuration|historique|console|chat|journal|orbes|orbe|galerie|galerie des orbes)", clean)
+        if open_panel_match:
+            target = open_panel_match.group(1)
+            if target in ["paramètres", "parametres", "réglages", "reglages", "configuration"]:
+                panel_type = "settings"
+            elif target in ["orbes", "orbe", "galerie", "galerie des orbes"]:
+                panel_type = "orbs"
+            else:
+                panel_type = "chat"
+            return {"action": "open_panel", "params": {"panel": panel_type}}
+
+        close_panel_match = re.search(r"(?:ferme|masque|cache)\s+(?:le\s+panneau\s+|les\s+|la\s+)?(paramètres|parametres|réglages|reglages|configuration|historique|console|chat|journal|orbes|orbe|galerie|panneau|panneaux)", clean)
+        if close_panel_match:
+            target = close_panel_match.group(1)
+            if target in ["paramètres", "parametres", "réglages", "reglages", "configuration"]:
+                panel_type = "settings"
+            elif target in ["orbes", "orbe", "galerie"]:
+                panel_type = "orbs"
+            elif target in ["historique", "console", "chat", "journal"]:
+                panel_type = "chat"
+            else:
+                panel_type = "all"
+            return {"action": "close_panel", "params": {"panel": panel_type}}
+
+        # 10. Sélection directe d'un orbe 3D par la voix
+        set_orb_match = re.search(r"(?:mets|active|charge|sélectionne|selectionne|change pour)\s+(?:l'orbe|l\s+orbe|l'orbe\s+de\s+|le\s+style|le\s+thème|l'orb|l\s+orb)\s+(.+)", clean)
+        if set_orb_match:
+            orb_query = set_orb_match.group(1).strip()
+            return {"action": "set_orb", "params": {"preset_name": orb_query}}
 
         return None
 
@@ -98,6 +136,11 @@ class Dispatcher:
             if is_voice:
                 has_wake, is_only, clean_query = check_wake_word(query)
                 if has_wake:
+                    from core.config import config
+                    from core.utils import play_chime
+                    if config.get("sound_feedback", True):
+                        play_chime("wake")
+
                     if is_only:
                         # Wake word seul -> réponse rapide immédiate
                         ack = get_wake_ack()

@@ -98,24 +98,51 @@ class TextToSpeech:
 
             voice = config.get("voice", "fr-FR-HenriNeural")
             sentences = self._split_into_sentences(text)
+            if not sentences:
+                state_manager.set_speaking(False)
+                return
 
-            for sentence in sentences:
+            import concurrent.futures
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+            def fetch_audio(s: str) -> Optional[str]:
+                try:
+                    loop = asyncio.new_event_loop()
+                    res = loop.run_until_complete(self._generate_audio_file(s, voice))
+                    loop.close()
+                    return res
+                except Exception:
+                    return None
+
+            # Pré-génération de la première phrase
+            future_next_audio = executor.submit(fetch_audio, sentences[0])
+
+            for i in range(len(sentences)):
                 if self._is_stopped:
                     break
+
+                sentence = sentences[i]
+                # Attendre l'audio de la phrase courante
+                try:
+                    audio_path = future_next_audio.result(timeout=15.0)
+                except Exception as e:
+                    print(f"[TTS] Timeout ou erreur génération phrase {i}: {e}")
+                    audio_path = None
+
+                # Lancer la pré-génération de la phrase N+1 en parallèle pendant que la phrase N joue
+                if i + 1 < len(sentences) and not self._is_stopped:
+                    future_next_audio = executor.submit(fetch_audio, sentences[i + 1])
+                else:
+                    future_next_audio = None
+
+                if self._is_stopped or not audio_path or not os.path.exists(audio_path):
+                    continue
 
                 # Envoyer le sous-titre au HUD
                 bus.broadcast_threadsafe({
                     "type": "subtitle",
                     "text": sentence
                 })
-
-                # Génération audio
-                loop = asyncio.new_event_loop()
-                audio_path = loop.run_until_complete(self._generate_audio_file(sentence, voice))
-                loop.close()
-
-                if not audio_path or not os.path.exists(audio_path):
-                    continue
 
                 try:
                     if not pygame.mixer.get_init():
@@ -150,7 +177,8 @@ class TextToSpeech:
 
                 if self._is_stopped:
                     break
-                time.sleep(0.1)
+
+            executor.shutdown(wait=False, cancel_futures=True)
 
             # Fin de parole
             state_manager.set_volume(0.0)

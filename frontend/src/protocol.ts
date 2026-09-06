@@ -37,6 +37,12 @@ export interface SettingsMessage {
   data: Record<string, any>;
 }
 
+export interface SystemStatsMessage {
+  type: 'system_stats';
+  cpu: number;
+  ram: number;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -44,7 +50,8 @@ export type IncomingMessage =
   | SubtitleMessage
   | MicStateMessage
   | ActionMessage
-  | SettingsMessage;
+  | SettingsMessage
+  | SystemStatsMessage;
 
 export interface UserInputMessage {
   type: 'user_input';
