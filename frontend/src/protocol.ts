@@ -78,6 +78,13 @@ export interface ApiKeyResultMessage {
   message?: string;
 }
 
+export interface ModelsCatalogMessage {
+  type: 'models_catalog';
+  options: any[];
+  tiers: Record<string, string>;
+  choice_mode: string;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -91,7 +98,8 @@ export type IncomingMessage =
   | ModelUsedMessage
   | ModelSelectClosedMessage
   | LongResponseMessage
-  | ApiKeyResultMessage;
+  | ApiKeyResultMessage
+  | ModelsCatalogMessage;
 
 export interface UserInputMessage {
   type: 'user_input';

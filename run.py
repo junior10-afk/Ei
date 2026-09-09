@@ -67,10 +67,25 @@ async def handle_update_settings(data: dict, websocket):
     new_settings = data.get("data", {})
     # Les clés API ne passent jamais par config.json (fichier versionné)
     new_settings.pop("api_keys_status", None)
+    # Fusion profonde de "models" (pour ne pas écraser le catalog éventuel)
+    if isinstance(new_settings.get("models"), dict):
+        merged = {**(config.get("models") or {}), **new_settings["models"]}
+        tiers_new = new_settings["models"].get("tiers")
+        if isinstance(tiers_new, dict):
+            merged["tiers"] = {**(merged.get("tiers") or {}), **tiers_new}
+        new_settings["models"] = merged
     config.update(new_settings)
     await bus.broadcast({
         "type": "settings",
         "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
+    })
+    # Confirmer le nouveau routage au HUD
+    from core.models import catalog_public_view
+    await bus.broadcast({
+        "type": "models_catalog",
+        "options": catalog_public_view(),
+        "tiers": config.get("models", {}).get("tiers", {}),
+        "choice_mode": config.get("model_choice_mode", "auto"),
     })
 
 async def handle_model_select_response(data: dict, websocket):

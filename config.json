@@ -19,7 +19,7 @@
   "models": {
     "tiers": {
       "chat": "gemini-flash",
-      "light": "groq-llama-70b",
+      "light": "gemini-flash",
       "heavy": "gemini-pro"
     }
   },

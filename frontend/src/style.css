@@ -1750,3 +1750,18 @@ body::after {
 .api-key-state.has-key { color: var(--cyan); }
 .api-key-state.ok { color: #38f39a; text-shadow: 0 0 8px rgba(56, 243, 154, 0.4); }
 .api-key-state.ko { color: #ff5470; }
+
+/* ── Modèles par usage (réglages) ─────────────────────────────────────── */
+.tier-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.tier-select {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0 !important;
+}

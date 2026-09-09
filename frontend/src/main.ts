@@ -340,6 +340,8 @@ class JarvisHUD {
       console.log('[HUD] Connecté au Runtime vocal.');
       this.connBadgeEl.className = 'connected';
       this.connLabelEl.innerText = 'ONLINE';
+      // Récupérer le catalogue des modèles pour les réglages
+      this.send({ type: 'get_models' });
     };
 
     this.ws.onmessage = (event) => {
@@ -453,6 +455,10 @@ class JarvisHUD {
 
       case 'api_key_result':
         this.settingsPanel.handleKeyResult(msg as any);
+        break;
+
+      case 'models_catalog':
+        this.settingsPanel.setCatalog(msg.options, msg.tiers);
         break;
 
       case 'long_response':
