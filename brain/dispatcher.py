@@ -186,8 +186,28 @@ class Dispatcher:
                 tts_engine.speak(speech_text)
                 return
 
-            # 5. Appel à la cascade LLM
-            llm_response = llm_cascade.ask(query)
+            # 5. Routage par taille de tâche, puis appel LLM
+            from core.models import route_model_for_task, catalog_public_view
+            from brain.prompt import build_system_prompt
+
+            route = route_model_for_task(query)
+            model = route.get("model")
+            is_heavy = route.get("tier") == "heavy"
+            if model:
+                bus.broadcast_threadsafe({
+                    "type": "model_used",
+                    "model_id": model.get("id"),
+                    "label": model.get("label", model.get("id")),
+                    "tier": route.get("tier"),
+                })
+            llm_response = None
+            if model:
+                if is_heavy:
+                    model = {**model, "max_tokens": int(model.get("max_tokens", 4000))}
+                llm_response = llm_cascade.ask_with_model(query, model, build_system_prompt(long_form=is_heavy))
+            if not llm_response:
+                # Repli : cascade classique (modèle indisponible ou non sélectionné)
+                llm_response = llm_cascade.ask(query)
 
             # Vérifier si le LLM a renvoyé un ordre d'action JSON
             action_data = self._parse_llm_action(llm_response)
@@ -205,6 +225,15 @@ class Dispatcher:
                 tts_engine.speak(speech_text)
             else:
                 # Réponse conversationnelle libre
-                tts_engine.speak(llm_response)
+                if is_heavy and llm_response:
+                    # Les grosses productions vont au journal, l'annonce reste vocale
+                    bus.broadcast_threadsafe({
+                        "type": "long_response",
+                        "text": llm_response,
+                        "model": (model or {}).get("label", "")
+                    })
+                    tts_engine.speak("Tâche terminée. Le résultat complet est dans la console.")
+                else:
+                    tts_engine.speak(llm_response)
 
 dispatcher = Dispatcher()

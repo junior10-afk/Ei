@@ -83,4 +83,51 @@ class ConfigManager:
     def host(self) -> str:
         return os.getenv("HOST", "127.0.0.1")
 
+    # --- Gestion des clés API dans le fichier .env --------------------------
+
+    ENV_PATH = BASE_DIR / ".env"
+    API_KEY_VARS = ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "MISTRAL_API_KEY"]
+
+    @staticmethod
+    def mask_value(value: str) -> str:
+        """Masque une clé : 6 premiers + 4 derniers caractères."""
+        if not value:
+            return ""
+        if len(value) <= 12:
+            return value[:2] + "…"
+        return f"{value[:6]}…{value[-4:]}"
+
+    def set_env_var(self, name: str, value: str):
+        """Écrit (ou remplace) une variable dans .env et met à jour os.environ."""
+        lines: list[str] = []
+        if self.ENV_PATH.exists():
+            try:
+                lines = self.ENV_PATH.read_text(encoding="utf-8").splitlines()
+            except Exception as e:
+                print(f"[Config] Erreur lecture .env: {e}")
+
+        replaced = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{name}="):
+                lines[i] = f"{name}={value}"
+                replaced = True
+                break
+        if not replaced:
+            lines.append(f"{name}={value}")
+
+        try:
+            nl = chr(13) + chr(10)
+            self.ENV_PATH.write_text(nl.join(lines) + nl, encoding="utf-8")
+        except Exception as e:
+            print(f"[Config] Erreur écriture .env: {e}")
+
+        if value:
+            os.environ[name] = value
+        else:
+            os.environ.pop(name, None)
+
+    def get_api_keys_status(self) -> Dict[str, str]:
+        """État masqué des clés (sûr à envoyer au HUD)."""
+        return {v: self.mask_value(os.getenv(v, "")) for v in self.API_KEY_VARS}
+
 config = ConfigManager()

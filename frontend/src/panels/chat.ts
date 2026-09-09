@@ -29,7 +29,13 @@ export class ChatPanel {
     msg.className = `chat-msg ${sender}`;
 
     const label = sender === 'user' ? 'Vous' : (sender === 'assistant' ? 'EI' : 'Action Système');
-    msg.innerHTML = `<strong>${label}:</strong> <span>${text}</span>`;
+    const strong = document.createElement('strong');
+    strong.textContent = `${label}:`;
+    const span = document.createElement('span');
+    span.textContent = text;
+    msg.appendChild(strong);
+    msg.appendChild(document.createTextNode(' '));
+    msg.appendChild(span);
 
     this.messagesContainer.appendChild(msg);
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;

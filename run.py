@@ -38,15 +38,59 @@ async def handle_stop_audio(data: dict, websocket):
 async def handle_get_settings(data: dict, websocket):
     await bus.send_to(websocket, {
         "type": "settings",
-        "data": config.config
+        "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
     })
+
+async def handle_set_api_key(data: dict, websocket):
+    """Enregistre une clé API dans .env (jamais dans config.json) et confirme."""
+    var = (data.get("var") or "").upper()
+    value = (data.get("value") or "").strip()
+    if var not in config.API_KEY_VARS:
+        await bus.send_to(websocket, {"type": "api_key_result", "var": var,
+                                       "ok": False, "message": "Variable non autorisée."})
+        return
+    config.set_env_var(var, value)
+    await bus.broadcast({
+        "type": "settings",
+        "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
+    })
+    print(f"[Run] Clé {var} mise à jour ({'effacée' if not value else 'enregistrée'}).")
+
+async def handle_test_api_key(data: dict, websocket):
+    """Teste la connexion d'un fournisseur et renvoie le résultat au HUD."""
+    from brain.api_test import test_api_key
+    provider = (data.get("provider") or "").lower()
+    result = await asyncio.get_running_loop().run_in_executor(None, test_api_key, provider)
+    await bus.send_to(websocket, {"type": "api_key_result", "provider": provider, **result})
 
 async def handle_update_settings(data: dict, websocket):
     new_settings = data.get("data", {})
+    # Les clés API ne passent jamais par config.json (fichier versionné)
+    new_settings.pop("api_keys_status", None)
     config.update(new_settings)
     await bus.broadcast({
         "type": "settings",
-        "data": config.config
+        "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
+    })
+
+async def handle_model_select_response(data: dict, websocket):
+    """Réponse de l'utilisateur à la fenêtre de sélection de modèle."""
+    from core.models import model_choice
+    model_id = data.get("model_id")
+    model_choice.resolve(model_id)
+    await bus.broadcast({
+        "type": "model_select_closed",
+        "model_id": model_id
+    })
+
+async def handle_get_models(data: dict, websocket):
+    """Le HUD demande le catalogue des modèles (pour les réglages)."""
+    from core.models import catalog_public_view
+    await bus.send_to(websocket, {
+        "type": "models_catalog",
+        "options": catalog_public_view(),
+        "tiers": config.get("models", {}).get("tiers", {}),
+        "choice_mode": config.get("model_choice_mode", "auto"),
     })
 
 def setup_ws_handlers():
@@ -55,6 +99,10 @@ def setup_ws_handlers():
     bus.register_handler("stop_audio", handle_stop_audio)
     bus.register_handler("get_settings", handle_get_settings)
     bus.register_handler("update_settings", handle_update_settings)
+    bus.register_handler("set_api_key", handle_set_api_key)
+    bus.register_handler("test_api_key", handle_test_api_key)
+    bus.register_handler("model_select_response", handle_model_select_response)
+    bus.register_handler("get_models", handle_get_models)
 
 def main():
     print("=" * 60)

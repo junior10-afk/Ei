@@ -12,5 +12,13 @@
   "sound_feedback": true,
   "orb_theme": "cyber_blue",
   "orb_animation": "plasma",
-  "auto_listen": true
+  "auto_listen": true,
+  "model_choice_mode": "ask",
+  "models": {
+    "tiers": {
+      "chat": "gemini-flash",
+      "light": "groq-llama-70b",
+      "heavy": "gemini-pro"
+    }
+  }
 }

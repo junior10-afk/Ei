@@ -4,6 +4,7 @@ import { ChatPanel } from './panels/chat';
 import { SettingsPanel } from './panels/settings';
 import { TimerWidget } from './panels/timer';
 import { OrbsGalleryModal } from './panels/orbs_modal';
+import { ModelSelectModal } from './panels/model_modal';
 import './style.css';
 
 class JarvisHUD {
@@ -13,6 +14,7 @@ class JarvisHUD {
   private settingsPanel: SettingsPanel;
   private timerWidget: TimerWidget;
   private orbsModal: OrbsGalleryModal;
+  private modelModal: ModelSelectModal;
 
   // Horloge & télémétrie
   private orbTimeEl: HTMLElement;
@@ -132,10 +134,16 @@ class JarvisHUD {
         this.orb.setQuality(newSettings.orb_quality as 'low' | 'medium' | 'high');
       }
       this.send({ type: 'update_settings', data: newSettings });
-    });
+    }, (payload) => this.send(payload));
 
     this.timerWidget = new TimerWidget(() => {
       this.sendUserInput('annule le minuteur');
+    });
+
+    this.modelModal = new ModelSelectModal((payload) => {
+      this.send(payload);
+      this.chatPanel.addMessage('action',
+        payload.model_id === 'auto' ? 'Choix du modèle : automatique' : `Modèle sélectionné : ${payload.model_id}`);
     });
 
     this.initClock();
@@ -423,6 +431,33 @@ class JarvisHUD {
           const settingPreset = document.getElementById('setting-orb-preset') as HTMLSelectElement;
           if (settingPreset) settingPreset.value = msg.params.preset_id;
         }
+        break;
+
+      case 'model_select':
+        this.modelModal.show({
+          task: msg.task,
+          tier: msg.tier,
+          tier_label: msg.tier_label,
+          suggested: msg.suggested,
+          options: msg.options,
+        });
+        break;
+
+      case 'model_select_closed':
+        this.modelModal.close();
+        break;
+
+      case 'model_used':
+        this.chatPanel.addMessage('action', `Modèle actif : ${msg.label} (${msg.tier})`);
+        break;
+
+      case 'api_key_result':
+        this.settingsPanel.handleKeyResult(msg as any);
+        break;
+
+      case 'long_response':
+        this.chatPanel.addMessage('assistant', msg.text);
+        this.chatPanel.show();
         break;
 
       case 'settings':

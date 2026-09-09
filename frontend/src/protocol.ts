@@ -43,6 +43,41 @@ export interface SystemStatsMessage {
   ram: number;
 }
 
+export interface ModelSelectMessage {
+  type: 'model_select';
+  task: string;
+  tier: string;
+  tier_label?: string;
+  suggested?: string | null;
+  options: any[];
+}
+
+export interface ModelUsedMessage {
+  type: 'model_used';
+  model_id: string;
+  label: string;
+  tier: string;
+}
+
+export interface ModelSelectClosedMessage {
+  type: 'model_select_closed';
+  model_id: string | null;
+}
+
+export interface LongResponseMessage {
+  type: 'long_response';
+  text: string;
+  model?: string;
+}
+
+export interface ApiKeyResultMessage {
+  type: 'api_key_result';
+  provider?: string;
+  var?: string;
+  ok: boolean;
+  message?: string;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -51,7 +86,12 @@ export type IncomingMessage =
   | MicStateMessage
   | ActionMessage
   | SettingsMessage
-  | SystemStatsMessage;
+  | SystemStatsMessage
+  | ModelSelectMessage
+  | ModelUsedMessage
+  | ModelSelectClosedMessage
+  | LongResponseMessage
+  | ApiKeyResultMessage;
 
 export interface UserInputMessage {
   type: 'user_input';

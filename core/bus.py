@@ -66,7 +66,7 @@ class MessageBus:
         }
         settings = {
             "type": "settings",
-            "data": config.config
+            "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
         }
         await self.send_to(websocket, initial_state)
         await self.send_to(websocket, mic_state)

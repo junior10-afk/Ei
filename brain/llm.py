@@ -23,7 +23,8 @@ class LLMCascade:
         if len(self.history) > 10:
             self.history.pop(0)
 
-    def _call_gemini(self, user_text: str, system_prompt: str) -> Optional[str]:
+    def _call_gemini(self, user_text: str, system_prompt: str, model: str = "gemini-2.5-flash",
+                     max_tokens: int = 1024) -> Optional[str]:
         api_key = config.gemini_api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
             return None
@@ -39,17 +40,30 @@ class LLMCascade:
             contents.append(f"User: {user_text}")
             full_user_msg = "\n".join(contents)
 
+            cfg_kwargs = dict(
+                system_instruction=system_prompt,
+                temperature=0.4,
+                max_output_tokens=max(max_tokens, 1024),
+            )
+            # Gemini 2.5 "réfléchit" avant de répondre : ces tokens de réflexion
+            # sont comptés dans max_output_tokens et peuvent vider la réponse
+            # (texte vide -> faux échec -> message "renseignez une clé API").
+            # On coupe la réflexion pour les modèles flash, et on la borne
+            # pour les pro (budget minimal autorisé).
+            if "pro" in model:
+                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=128)
+            else:
+                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=model,
                 contents=full_user_msg,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.4,
-                    max_output_tokens=300
-                )
+                config=types.GenerateContentConfig(**cfg_kwargs)
             )
             if response and response.text:
                 return response.text.strip()
+            print(f"[LLM] Gemini ({model}) a renvoyé une réponse vide (finishReason="
+                  f"{getattr(response, 'candidates', None) and response.candidates[0].finish_reason}).")
         except Exception as e:
             print(f"[LLM] Erreur Gemini: {e}")
             self._set_cooldown("gemini", 60.0)
@@ -95,6 +109,43 @@ class LLMCascade:
             return self._call_openai_compatible("ollama", base_url, "ollama", model, user_text, system_prompt)
         except Exception:
             return None
+
+    def ask_with_model(self, user_text: str, model: Optional[Dict], system_prompt: str) -> Optional[str]:
+        """Exécute une requête sur un modèle précis du catalogue (dict: provider/model/key_env).
+
+        Retourne None si le modèle est indisponible (clé manquante, erreur API) :
+        l'appelant doit alors replier sur ask() (cascade).
+        """
+        if not model:
+            return None
+        provider = (model.get("provider") or "").lower()
+        model_name = model.get("model") or ""
+        max_tokens = int(model.get("max_tokens", 300))
+        key_env = model.get("key_env") or ""
+        api_key = os.getenv(key_env, "") if key_env else ""
+
+        if provider == "gemini":
+            ans = self._call_gemini(user_text, system_prompt, model=model_name, max_tokens=max_tokens)
+        elif provider == "ollama":
+            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            ans = self._call_openai_compatible("ollama", base_url, "ollama", model_name or "llama3.2",
+                                               user_text, system_prompt)
+        else:
+            base_urls = {
+                "groq": "https://api.groq.com/openai/v1",
+                "openai": "https://api.openai.com/v1",
+                "mistral": "https://api.mistral.ai/v1",
+            }
+            base_url = model.get("base_url") or base_urls.get(provider)
+            if not base_url or not api_key:
+                print(f"[LLM] Modèle {model.get('id')} indisponible (clé {key_env or 'N/A'} manquante).")
+                return None
+            ans = self._call_openai_compatible(provider, base_url, api_key, model_name,
+                                               user_text, system_prompt)
+        if ans:
+            self.add_history("user", user_text)
+            self.add_history("assistant", ans)
+        return ans
 
     def ask(self, user_text: str) -> str:
         """Exécute la cascade selon le cerveau préféré et les clés disponibles."""
@@ -160,6 +211,10 @@ class LLMCascade:
                     return ans
 
         # Fallback gracieux si aucune clé ou indisponible
+        has_any_key = any([config.gemini_api_key, config.groq_api_key,
+                           config.openai_api_key, config.mistral_api_key])
+        if has_any_key:
+            return "Les commandes locales fonctionnent, mais le modèle distant est momentanément indisponible (erreur API ou quota dépassé). Réessayez dans une minute."
         return "Toutes les commandes locales et outils fonctionnent. Pour les questions libres, veuillez renseigner une clé API dans le fichier .env."
 
 llm_cascade = LLMCascade()

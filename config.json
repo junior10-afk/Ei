@@ -12,9 +12,17 @@
   "silence_duration_sec": 1.2,
   "max_phrase_sec": 15,
   "sound_feedback": true,
-  "orb_theme": "arc_reactor",
-  "orb_animation": "quantum",
+  "orb_theme": "gargantua",
+  "orb_animation": "plasma",
   "auto_listen": true,
+  "model_choice_mode": "ask",
+  "models": {
+    "tiers": {
+      "chat": "gemini-flash",
+      "light": "groq-llama-70b",
+      "heavy": "gemini-pro"
+    }
+  },
   "orb_quality": "high",
-  "orb_preset": "arc_reactor"
+  "orb_preset": "gargantua"
 }

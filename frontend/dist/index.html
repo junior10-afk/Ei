@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EI - Assistant Vocal & HUD 3D</title>
-    <script type="module" crossorigin src="/assets/index-upF8KUDr.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DsTuTf5b.css">
+    <script type="module" crossorigin src="/assets/index-BTEe2xy4.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CFROWwIC.css">
   </head>
   <body>
     <!-- Container Canvas Three.js pour l'Orbe 3D de Particules -->
@@ -387,9 +387,42 @@
           <label class="setting-label">Mots d'activation (séparés par virgule) :</label>
           <input id="setting-wake-words" type="text" class="setting-input" value="ei, jarvis, assistant" />
         </div>
+        <div class="setting-item">
+          <label class="setting-label">Sélection du modèle LLM :</label>
+          <select id="setting-model-choice-mode" class="setting-input">
+            <option value="auto">Automatique (EI choisit selon la tâche)</option>
+            <option value="ask">Me demander pour les tâches complexes</option>
+            <option value="always">Toujours me proposer le modèle</option>
+          </select>
+        </div>
+        <div class="settings-section-title">◈ CLÉS API (sauvegardées dans .env)</div>
+        <div id="api-keys-section"></div>
         <button id="save-settings-btn" class="hud-btn save-btn">
           ENREGISTRER LES PARAMÈTRES
         </button>
+      </div>
+    </div>
+
+    <!-- ══ FENÊTRE DE SÉLECTION DU MODÈLE LLM ═════════════════════════════ -->
+    <div id="model-select-panel" class="hidden">
+      <div class="model-select-overlay" id="model-select-overlay"></div>
+      <div class="model-select-modal">
+        <div class="model-select-header">
+          <div class="model-select-title" id="model-select-title">◈ EI // SÉLECTION DU MODÈLE</div>
+          <span id="model-select-close" class="orbs-close-btn" title="Choix automatique (Échap)">✕</span>
+        </div>
+        <div class="model-select-task-wrap">
+          <span class="model-select-prefix">TÂCHE ›</span>
+          <div id="model-select-task"></div>
+        </div>
+        <div class="model-select-tier-row">
+          <span id="model-select-tier">TÂCHE ÉVALUÉE</span>
+          <span id="model-select-timer">RÉPONSE AUTO DANS 120s</span>
+        </div>
+        <div id="model-select-grid"></div>
+        <div class="model-select-footer">
+          <button id="model-select-auto" class="hud-btn">✦ LAISSER EI DÉCIDER (AUTO)</button>
+        </div>
       </div>
     </div>
 
