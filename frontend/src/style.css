@@ -1762,6 +1762,18 @@ body::after {
 
 .tier-select {
   flex: 1;
-  min-width: 200px;
+  min-width: 180px;
   margin-bottom: 0 !important;
+}
+
+.tier-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.tier-provider-select {
+  flex: 0 0 150px;
+  min-width: 150px;
 }

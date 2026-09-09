@@ -108,6 +108,18 @@ async def handle_get_models(data: dict, websocket):
         "choice_mode": config.get("model_choice_mode", "auto"),
     })
 
+async def handle_list_provider_models(data: dict, websocket):
+    """Liste en direct les modèles réellement offerts par un fournisseur
+    (Google, Groq, OpenAI, Mistral, Ollama) avec la clé enregistrée."""
+    from brain.providers import list_provider_models
+    provider = (data.get("provider") or "").lower()
+    result = await asyncio.get_running_loop().run_in_executor(None, list_provider_models, provider)
+    await bus.send_to(websocket, {
+        "type": "provider_models",
+        "provider": provider,
+        **result,
+    })
+
 def setup_ws_handlers():
     bus.register_handler("user_input", handle_user_input)
     bus.register_handler("toggle_mic", handle_toggle_mic)
@@ -116,6 +128,7 @@ def setup_ws_handlers():
     bus.register_handler("update_settings", handle_update_settings)
     bus.register_handler("set_api_key", handle_set_api_key)
     bus.register_handler("test_api_key", handle_test_api_key)
+    bus.register_handler("list_provider_models", handle_list_provider_models)
     bus.register_handler("model_select_response", handle_model_select_response)
     bus.register_handler("get_models", handle_get_models)
 

@@ -461,6 +461,10 @@ class JarvisHUD {
         this.settingsPanel.setCatalog(msg.options, msg.tiers);
         break;
 
+      case 'provider_models':
+        this.settingsPanel.setProviderModels(msg);
+        break;
+
       case 'long_response':
         this.chatPanel.addMessage('assistant', msg.text);
         this.chatPanel.show();

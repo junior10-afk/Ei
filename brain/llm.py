@@ -69,7 +69,8 @@ class LLMCascade:
             self._set_cooldown("gemini", 60.0)
         return None
 
-    def _call_openai_compatible(self, provider: str, base_url: str, api_key: str, model: str, user_text: str, system_prompt: str) -> Optional[str]:
+    def _call_openai_compatible(self, provider: str, base_url: str, api_key: str, model: str, user_text: str, system_prompt: str,
+                                max_tokens: int = 1024) -> Optional[str]:
         if not api_key:
             return None
 
@@ -88,9 +89,9 @@ class LLMCascade:
                 "model": model,
                 "messages": messages,
                 "temperature": 0.4,
-                "max_tokens": 250
+                "max_tokens": max(max_tokens, 512)
             }
-            res = requests.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=10)
+            res = requests.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=45)
             if res.status_code == 200:
                 data = res.json()
                 return data["choices"][0]["message"]["content"].strip()
@@ -141,7 +142,7 @@ class LLMCascade:
                 print(f"[LLM] Modèle {model.get('id')} indisponible (clé {key_env or 'N/A'} manquante).")
                 return None
             ans = self._call_openai_compatible(provider, base_url, api_key, model_name,
-                                               user_text, system_prompt)
+                                               user_text, system_prompt, max_tokens=max_tokens)
         if ans:
             self.add_history("user", user_text)
             self.add_history("assistant", ans)

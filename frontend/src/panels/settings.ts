@@ -38,6 +38,8 @@ export class SettingsPanel {
   private lastKeyStatus: Record<string, string> = {};
   private catalog: ModelOptionPublic[] = [];
   private tierSelection: Record<string, string> = {};
+  private liveByProvider: Record<string, { id: string; label: string; model: string }[]> = {};
+  private lastProviderError: Record<string, string> = {};
 
   constructor(onSave: (settings: Record<string, any>) => void, send: (payload: any) => void) {
     this.element = document.getElementById('settings-panel')!;
@@ -294,45 +296,124 @@ export class SettingsPanel {
     if (!this.tiersSectionEl) return;
     this.tiersSectionEl.innerHTML = '';
 
-    if (!this.catalog.length) {
-      const hint = document.createElement('div');
-      hint.className = 'tier-row';
-      hint.innerHTML = `<span class="api-key-help">Catalogue des modèles en attente (reconnexion au runtime)…</span>`;
-      this.tiersSectionEl.appendChild(hint);
-      return;
-    }
+    // Bouton de rafraîchissement des listes officielles
+    const refresh = document.createElement('div');
+    refresh.className = 'api-key-row';
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'hud-btn api-key-btn test-btn';
+    refreshBtn.textContent = '↻ ACTUALISER LES LISTES';
+    refreshBtn.title = 'Demander aux fournisseurs leur liste officielle de modèles';
+    refreshBtn.addEventListener('click', () => {
+      this.liveByProvider = {};
+      this.renderTiers();
+    });
+    refresh.appendChild(refreshBtn);
+    this.tiersSectionEl.appendChild(refresh);
+
+    const providers = API_PROVIDERS.map((p) => ({
+      provider: p.provider,
+      label: p.label,
+      hasKey: Boolean(this.lastKeyStatus[p.var]),
+    }));
+    providers.push({ provider: 'ollama', label: 'Ollama (local)', hasKey: true });
 
     TIERS.forEach((t) => {
-      const models = this.catalog.filter((m) => (m.tiers || []).includes(t.id));
-      if (!models.length) return;
-
       const row = document.createElement('div');
       row.className = 'tier-row';
+      row.style.flexDirection = 'column';
+      row.style.alignItems = 'stretch';
 
       const label = document.createElement('div');
       label.className = 'api-key-label';
       label.innerHTML = `<span class="api-key-name">${t.label}</span>`;
       row.appendChild(label);
 
-      const select = document.createElement('select');
-      select.className = 'setting-input tier-select';
-      models.forEach((m) => {
+      const controls = document.createElement('div');
+      controls.className = 'tier-controls';
+
+      // 1. Sélecteur de fournisseur
+      const provSel = document.createElement('select');
+      provSel.className = 'setting-input tier-select tier-provider-select';
+      providers.forEach((p) => {
         const opt = document.createElement('option');
-        opt.value = m.id;
-        const keyOk = this.hasProviderKey(m.provider);
-        opt.textContent = `${m.label} — ${m.cost}${m.latency ? ' · ' + m.latency : ''}${keyOk ? '' : ' (clé manquante)'}`;
-        if (!keyOk) opt.disabled = true;
-        select.appendChild(opt);
+        opt.value = p.provider;
+        opt.textContent = p.label + (p.hasKey ? '' : ' (sans clé)');
+        provSel.appendChild(opt);
       });
-      const selected = this.tierSelection[t.id];
-      if (selected && models.some((m) => m.id === selected)) select.value = selected;
-      select.addEventListener('change', () => {
-        this.tierSelection[t.id] = select.value;
+
+      // 2. Sélecteur de modèle (liste officielle du fournisseur, live)
+      const modelSel = document.createElement('select');
+      modelSel.className = 'setting-input tier-select';
+
+      const currentRef = this.tierSelection[t.id] || '';
+      const currentProvider = currentRef.includes('/') ? currentRef.split('/')[0]
+        : (this.catalog.find((m) => m.id === currentRef)?.provider || 'gemini');
+      provSel.value = currentProvider;
+
+      const fillModels = () => {
+        const provider = provSel.value;
+        modelSel.innerHTML = '';
+        const live = this.liveByProvider[provider];
+        const addOpt = (value: string, text: string, disabled = false) => {
+          const o = document.createElement('option');
+          o.value = value; o.textContent = text; o.disabled = disabled;
+          modelSel.appendChild(o);
+        };
+        if (live === undefined) {
+          addOpt('', 'Chargement de la liste officielle…', true);
+          this.liveByProvider[provider] = [];  // évite le doublon de requête
+          this.send({ type: 'list_provider_models', provider });
+          return;
+        }
+        if (!live.length) {
+          addOpt('', this.lastProviderError[provider] || 'Liste vide', true);
+          return;
+        }
+        live.forEach((m) => addOpt(m.id, m.label));
+        const want = currentRef.includes('/') && currentRef.split('/')[0] === provider
+          ? currentRef : undefined;
+        if (want && live.some((m) => m.id === want)) modelSel.value = want;
+        else {
+          modelSel.value = live[0].id;
+          // Snap : la référence enregistrée ne correspond plus à un modèle
+          // réel du fournisseur (ex. changement de fournisseur) → on corrige.
+          if (this.tierSelection[t.id] !== modelSel.value) {
+            this.tierSelection[t.id] = modelSel.value;
+            this.pushTierSelection();
+          }
+        }
+      };
+
+      provSel.addEventListener('change', () => {
+        const first = this.liveByProvider[provSel.value]?.[0];
+        this.tierSelection[t.id] = first ? first.id : `${provSel.value}/`;
+        this.pushTierSelection();
+        this.renderTiers();
+      });
+      modelSel.addEventListener('change', () => {
+        this.tierSelection[t.id] = modelSel.value;
         this.pushTierSelection();
       });
-      row.appendChild(select);
 
+      fillModels();
+
+      controls.appendChild(provSel);
+      controls.appendChild(modelSel);
+      row.appendChild(controls);
       this.tiersSectionEl!.appendChild(row);
     });
+  }
+
+  /** Réponse du runtime à {type:'list_provider_models'}. */
+  public setProviderModels(data: { provider?: string; ok?: boolean; models?: { id: string; label: string; model: string }[]; message?: string }) {
+    if (!data.provider) return;
+    if (data.ok) {
+      this.liveByProvider[data.provider] = data.models || [];
+      delete this.lastProviderError[data.provider];
+    } else {
+      this.liveByProvider[data.provider] = [];
+      this.lastProviderError[data.provider] = data.message || 'Liste indisponible.';
+    }
+    this.renderTiers();
   }
 }

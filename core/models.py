@@ -184,12 +184,51 @@ def get_model(model_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+# Références dynamiques 'fournisseur/nom-du-modele' (listées via brain/providers)
+_KEY_ENV_BY_PROVIDER = {
+    "gemini": "GEMINI_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "ollama": "",
+}
+
+
+def parse_tier_ref(ref: str) -> Optional[Dict[str, Any]]:
+    """Résilie une référence de tier : ID du catalogue d'abord, sinon une
+    référence dynamique 'provider/model-name' renvoyée par l'API live du
+    fournisseur (n'importe quel modèle Google/Groq/OpenAI/Mistral/Ollama).
+    """
+    if not ref:
+        return None
+    known = get_model(ref)
+    if known:
+        return known
+    if "/" in ref:
+        provider, _, model_name = ref.partition("/")
+        provider = provider.lower().strip()
+        model_name = model_name.strip()
+        if provider in _KEY_ENV_BY_PROVIDER and model_name:
+            return {
+                "id": ref,
+                "label": f"{model_name} ({provider})",
+                "provider": provider,
+                "model": model_name,
+                "key_env": _KEY_ENV_BY_PROVIDER[provider],
+                "cost": "",
+                "latency": "",
+                "description": "Modèle sélectionné directement chez le fournisseur.",
+                "tiers": [],
+            }
+    return None
+
+
 def default_model_for_tier(tier: str) -> Optional[Dict[str, Any]]:
     models_cfg = config.get("models", {}) or {}
     tiers = {**DEFAULT_TIERS, **(models_cfg.get("tiers") or {})}
     preferred = tiers.get(tier)
     if preferred:
-        model = get_model(preferred)
+        model = parse_tier_ref(preferred)
         if model:
             return model
     # Repli : premier modèle du catalogue qui couvre le tier
@@ -306,7 +345,7 @@ def route_model_for_task(task_text: str) -> Dict[str, Any]:
             options=catalog_public_view(),
         )
 
-    model = get_model(chosen_id) if chosen_id else default
+    model = parse_tier_ref(chosen_id) if chosen_id else default
     if chosen_id and model is None:
         print(f"[Models] Modèle inconnu '{chosen_id}', repli sur le défaut du tier.")
         model = default

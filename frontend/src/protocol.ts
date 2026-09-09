@@ -85,6 +85,14 @@ export interface ModelsCatalogMessage {
   choice_mode: string;
 }
 
+export interface ProviderModelsMessage {
+  type: 'provider_models';
+  provider: string;
+  ok: boolean;
+  models: { id: string; label: string; model: string }[];
+  message?: string;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -99,7 +107,8 @@ export type IncomingMessage =
   | ModelSelectClosedMessage
   | LongResponseMessage
   | ApiKeyResultMessage
-  | ModelsCatalogMessage;
+  | ModelsCatalogMessage
+  | ProviderModelsMessage;
 
 export interface UserInputMessage {
   type: 'user_input';
