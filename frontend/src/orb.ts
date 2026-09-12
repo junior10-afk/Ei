@@ -287,7 +287,7 @@ export class JarvisOrb {
       const i3 = i * 3;
       const ph = this.phase[i];
 
-      if (style === 'vortex' || preset.id === 'gargantua') {
+      if (style === 'vortex') {
         // Disque d'accrétion incliné + jets polaires
         if (i < this.N * 0.82) {
           const angle = Math.random() * Math.PI * 2;
@@ -375,7 +375,7 @@ export class JarvisOrb {
           this.pos[i3 + 2] = Math.sin(theta + shift) * strandR;
         }
         this.vel[i3] = 0; this.vel[i3 + 1] = 0; this.vel[i3 + 2] = 0;
-      } else if (style === 'tesseract' || preset.id === 'tesseract') {
+      } else if (style === 'tesseract') {
         // Hypercube 4D: 16 sommets reliés
         const vIdx = i % 16;
         const sx = (vIdx & 1) ? 1 : -1;
@@ -714,7 +714,7 @@ export class JarvisOrb {
       const dist = Math.sqrt(x * x + y * y + z * z) || 0.01;
 
       // ── Comportements par style d'orbe ──
-      if (style === 'vortex' || this.currentPreset.id === 'gargantua') {
+      if (style === 'vortex') {
         // Gargantua: Accretion disk avec shear Keplerien & horizon des événements impénétrable
         if (i < this.N * 0.82) {
           const xzDist = Math.sqrt(x * x + z * z) || 0.01;
@@ -785,7 +785,7 @@ export class JarvisOrb {
         this.vel[i3] += (targetX - x) * 0.04;
         this.vel[i3 + 2] += (targetZ - z) * 0.04;
         this.vel[i3 + 1] += Math.sin(ph + t * 2.0) * (0.003 + this.volume * 0.02);
-      } else if (style === 'tesseract' || this.currentPreset.id === 'tesseract') {
+      } else if (style === 'tesseract') {
         // Tesseract 4D: Rotation et pulsation géométrique
         const vIdx = i % 16;
         const sx = (vIdx & 1) ? 1 : -1;

@@ -131,28 +131,6 @@ export const ORB_PRESETS: Record<string, OrbPreset> = {
     particleSize: 1.05,
     speedMultiplier: 1.25
   },
-  hal_9000: {
-    id: 'hal_9000',
-    name: 'HAL-9000 Sovereign',
-    category: 'Sci-Fi & IA',
-    icon: '👁️',
-    description: "L'œil optique rouge incandescent et implacable de 2001, l'Odyssée de l'espace.",
-    palette: {
-      idle: 0xd50000,
-      listening: 0xff1744,
-      thinking: 0xff5252,
-      speaking: 0xff8a80,
-      core: 0xffffff,
-      line: 0xb71c1c,
-      electron: 0xff1744
-    },
-    animation: 'quantum',
-    colorMode: 'eye',
-    hasLines: false,
-    glowColor: 'rgba(255, 23, 68, 0.55)',
-    particleSize: 1.0,
-    speedMultiplier: 0.9
-  },
   cortana: {
     id: 'cortana',
     name: 'Cortana Hologram',
@@ -221,28 +199,6 @@ export const ORB_PRESETS: Record<string, OrbPreset> = {
   },
 
   // ── 3. COSMIQUE & ASTROPHYSIQUE ─────────────────────────────────────────────
-  gargantua: {
-    id: 'gargantua',
-    name: 'Gargantua (Singularité)',
-    category: 'Cosmique & Espace',
-    icon: '🕳️',
-    description: 'Disque d’accrétion relativiste ultra-lumineux autour d’un trou noir absolu.',
-    palette: {
-      idle: 0xff6d00,
-      listening: 0xff9100,
-      thinking: 0xdd2c00,
-      speaking: 0xffd180,
-      core: 0xffffff,
-      line: 0xff3d00,
-      electron: 0xffffff
-    },
-    animation: 'vortex',
-    colorMode: 'accretion',
-    hasLines: false,
-    glowColor: 'rgba(255, 109, 0, 0.55)',
-    particleSize: 1.15,
-    speedMultiplier: 1.6
-  },
   pulsar: {
     id: 'pulsar',
     name: 'Neutron Pulsar',
@@ -400,75 +356,7 @@ export const ORB_PRESETS: Record<string, OrbPreset> = {
     particleSize: 0.95,
     speedMultiplier: 0.8
   },
-  crystal: {
-    id: 'crystal',
-    name: 'Crystal Chronos',
-    category: 'Énergie & Éléments',
-    icon: '💎',
-    description: 'Prisme géométrique cristallin réfractant cyan quartz, améthyste et lumière pure.',
-    palette: {
-      idle: 0x84ffff,
-      listening: 0xb388ff,
-      thinking: 0xf48fb1,
-      speaking: 0xffffff,
-      core: 0xe1bee7,
-      line: 0x80deea,
-      electron: 0xffffff
-    },
-    animation: 'crystal',
-    colorMode: 'crystal',
-    hasLines: true,
-    lineOpacity: 0.28,
-    glowColor: 'rgba(132, 255, 255, 0.45)',
-    particleSize: 1.05
-  },
-  radioactive: {
-    id: 'radioactive',
-    name: 'Rad-226 Isotope',
-    category: 'Énergie & Éléments',
-    icon: '☢️',
-    description: 'Lueur Tcherenkov intense et nuage d’isotopes verts instables sous radiation gamma.',
-    palette: {
-      idle: 0x76ff03,
-      listening: 0x00e676,
-      thinking: 0xffea00,
-      speaking: 0xccff90,
-      core: 0xf4ff81,
-      line: 0x64dd17,
-      electron: 0xffffff
-    },
-    animation: 'quantum',
-    colorMode: 'gradient',
-    hasLines: false,
-    glowColor: 'rgba(118, 255, 3, 0.55)',
-    particleSize: 1.0,
-    speedMultiplier: 1.3
-  },
-
   // ── 5. CYBER, GÉOMÉTRIE & EXPÉRIMENTAL ──────────────────────────────────────
-  tesseract: {
-    id: 'tesseract',
-    name: 'Tesseract 4D',
-    category: 'Cyber & Géométrie',
-    icon: '🧊',
-    description: 'Véritable hypercube 4D en rotation géométrique quadridimensionnelle avec arêtes néon.',
-    palette: {
-      idle: 0x00e5ff,
-      listening: 0x3d5afe,
-      thinking: 0xd500f9,
-      speaking: 0xffffff,
-      core: 0x80d8ff,
-      line: 0x00b0ff,
-      electron: 0xffffff
-    },
-    animation: 'tesseract',
-    colorMode: 'tesseract',
-    hasLines: true,
-    lineOpacity: 0.35,
-    glowColor: 'rgba(0, 229, 255, 0.5)',
-    particleSize: 1.15,
-    speedMultiplier: 1.2
-  },
   dna_helix: {
     id: 'dna_helix',
     name: 'Double Helix DNA',

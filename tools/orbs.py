@@ -22,10 +22,6 @@ ORB_MAP = {
     "réacteur arc": "arc_reactor",
     "mark 85": "arc_reactor",
     
-    "hal_9000": "hal_9000",
-    "hal": "hal_9000",
-    "hal 9000": "hal_9000",
-    
     "cortana": "cortana",
     "halo": "cortana",
     
@@ -35,12 +31,6 @@ ORB_MAP = {
     
     "tachikoma": "tachikoma",
     "ghost in the shell": "tachikoma",
-    
-    "gargantua": "gargantua",
-    "trou noir": "gargantua",
-    "interstellar": "gargantua",
-    "singularite": "gargantua",
-    "singularité": "gargantua",
     
     "pulsar": "pulsar",
     "neutron": "pulsar",
@@ -75,22 +65,6 @@ ORB_MAP = {
     "ocean": "abyssal",
     "océan": "abyssal",
     
-    "crystal": "crystal",
-    "cristal": "crystal",
-    "chronos": "crystal",
-    "diamant": "crystal",
-    
-    "radioactive": "radioactive",
-    "radioactif": "radioactive",
-    "nucleaire": "radioactive",
-    "nucléaire": "radioactive",
-    "tchernobyl": "radioactive",
-    "rad": "radioactive",
-    
-    "tesseract": "tesseract",
-    "hypercube": "tesseract",
-    "cube": "tesseract",
-    
     "dna_helix": "dna_helix",
     "adn": "dna_helix",
     "dna": "dna_helix",
@@ -117,11 +91,9 @@ ORB_DISPLAY_NAMES = {
     "cyber_blue": "Cyan Cyber",
     "iron_man": "Mark VII Stark",
     "arc_reactor": "Arc Reactor MK-85",
-    "hal_9000": "HAL-9000",
     "cortana": "Cortana Hologram",
     "aperture": "Aperture Optical Core",
     "tachikoma": "Tachikoma Cyber-Net",
-    "gargantua": "Gargantua Trou Noir",
     "pulsar": "Neutron Pulsar",
     "saturn_rings": "Saturn Rings",
     "aurora": "Aurora Borealis",
@@ -129,9 +101,6 @@ ORB_DISPLAY_NAMES = {
     "solar_flare": "Solar Flare",
     "tesla_coil": "Tesla 100kV",
     "abyssal": "Abyssal Biolum",
-    "crystal": "Crystal Chronos",
-    "radioactive": "Rad-226 Isotope",
-    "tesseract": "Tesseract 4D",
     "dna_helix": "Double Hélice ADN",
     "neural_synapse": "Neural Synapse",
     "synthwave": "Synthwave 84",
@@ -141,7 +110,7 @@ ORB_DISPLAY_NAMES = {
 @tool_registry.register(
     name="set_orb",
     description="Change l'orbe 3D holographique du HUD par son nom ou son preset",
-    parameters={"preset_name": "str (ex: 'gargantua', 'arc reactor', 'hal', 'matrix', 'tesla', 'saturne')"}
+    parameters={"preset_name": "str (ex: 'arc reactor', 'matrix', 'tesla', 'saturne', 'pulsar')"}
 )
 def set_orb(preset_name: str) -> Dict[str, Any]:
     query = preset_name.lower().strip()

@@ -62,10 +62,10 @@ def run_tests():
     assert p_res["success"] is True
 
     # Orbes 3D
-    orb_res = tool_registry.execute("set_orb", {"preset_name": "gargantua"})
+    orb_res = tool_registry.execute("set_orb", {"preset_name": "arc reactor"})
     print(f"Orbe: {orb_res['speech']}")
     assert orb_res["success"] is True
-    assert orb_res["result"]["preset_id"] == "gargantua"
+    assert orb_res["result"]["preset_id"] == "arc_reactor"
 
     print("Tools OK!")
 

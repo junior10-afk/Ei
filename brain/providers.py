@@ -11,6 +11,7 @@ import re
 from typing import Dict, List
 
 import requests
+from core.config import config
 
 PROVIDER_KEY_ENV: Dict[str, str] = {
     "gemini": "GEMINI_API_KEY",
@@ -45,7 +46,7 @@ def list_provider_models(provider: str) -> dict:
 
 
 def _list_gemini() -> dict:
-    key = os.getenv("GEMINI_API_KEY", "")
+    key = config.gemini_api_key or os.getenv("GEMINI_API_KEY", "").strip().strip('"\'')
     if not key:
         return {"ok": False, "models": [], "message": "Aucune clé Gemini enregistrée."}
     models: List[dict] = []
@@ -81,7 +82,7 @@ def _list_openai_compat(provider: str) -> dict:
     key_env = PROVIDER_KEY_ENV.get(provider)
     if not key_env:
         return {"ok": False, "models": [], "message": "Fournisseur inconnu."}
-    key = os.getenv(key_env, "")
+    key = os.getenv(key_env, "").strip().strip('"\'')
     if not key:
         return {"ok": False, "models": [], "message": f"Aucune clé {provider} enregistrée."}
     urls = {

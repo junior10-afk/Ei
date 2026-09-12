@@ -3,26 +3,26 @@
   "user_name": "Monsieur",
   "user_city": "Lomé",
   "wake_words": [
-    "ei"
+    "eve"
   ],
   "voice": "fr-FR-HenriNeural",
   "preferred_brain": "gemini",
   "mic_device_index": null,
   "mic_sensitivity_rms": 0.015,
   "silence_duration_sec": 1.2,
-  "max_phrase_sec": 15,
+  "max_phrase_sec": 15.0,
   "sound_feedback": true,
-  "orb_theme": "gargantua",
+  "orb_theme": "cyber_blue",
   "orb_animation": "plasma",
   "auto_listen": true,
   "model_choice_mode": "ask",
   "models": {
     "tiers": {
-      "chat": "gemini-flash",
-      "light": "gemini-flash",
-      "heavy": "gemini-pro"
+      "chat": "gemini/gemini-3.1-flash-lite-preview",
+      "light": "gemini/gemini-2.5-flash",
+      "heavy": "gemini/gemini-2.5-flash"
     }
   },
   "orb_quality": "high",
-  "orb_preset": "gargantua"
+  "orb_preset": "cyber_blue"
 }

@@ -13,6 +13,7 @@ La fenêtre de sélection passe par le bus WebSocket :
   Runtime -> HUD : {"type": "model_select", task, tier, suggested, options}
   HUD -> Runtime  : {"type": "model_select_response", model_id}
 """
+import os
 import re
 import threading
 import time
@@ -46,7 +47,7 @@ DEFAULT_CATALOG: List[Dict[str, Any]] = [
         "cost": "gratuit (quota)",
         "latency": "rapide",
         "description": "Polyvalent : chat avancé, petites tâches, résumés.",
-        "tiers": [TIER_CHAT, TIER_LIGHT],
+        "tiers": [TIER_CHAT, TIER_LIGHT, TIER_HEAVY],
     },
     {
         "id": "groq-llama-70b",
@@ -223,15 +224,38 @@ def parse_tier_ref(ref: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def is_model_available(model: Optional[Dict[str, Any]]) -> bool:
+    """Vérifie si le modèle est utilisable (clé API présente ou local)."""
+    if not model:
+        return False
+    provider = (model.get("provider") or "").lower()
+    if provider == "ollama":
+        return True
+    key_env = model.get("key_env") or _KEY_ENV_BY_PROVIDER.get(provider, "")
+    return bool(key_env and os.getenv(key_env, "").strip().strip('"\''))
+
+
 def default_model_for_tier(tier: str) -> Optional[Dict[str, Any]]:
     models_cfg = config.get("models", {}) or {}
     tiers = {**DEFAULT_TIERS, **(models_cfg.get("tiers") or {})}
     preferred = tiers.get(tier)
     if preferred:
         model = parse_tier_ref(preferred)
+        if model and is_model_available(model):
+            return model
+    # Repli 1 : modèle du catalogue qui couvre le tier ET dont la clé est configurée
+    for m in get_catalog():
+        if tier in (m.get("tiers") or []) and is_model_available(m):
+            return m
+    # Repli 2 : n'importe quel modèle du catalogue dont la clé est configurée
+    for m in get_catalog():
+        if is_model_available(m):
+            return m
+    # Repli 3 : modèle préféré sans vérification si aucune clé n'est encore enregistrée
+    if preferred:
+        model = parse_tier_ref(preferred)
         if model:
             return model
-    # Repli : premier modèle du catalogue qui couvre le tier
     for m in get_catalog():
         if tier in (m.get("tiers") or []):
             return m

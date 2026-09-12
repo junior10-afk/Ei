@@ -7,6 +7,7 @@ import os
 from typing import Optional
 
 import requests
+from core.config import config
 
 
 def test_api_key(provider: str) -> dict:
@@ -15,13 +16,13 @@ def test_api_key(provider: str) -> dict:
         if provider == "gemini":
             return _test_gemini()
         if provider == "groq":
-            return _test_openai_compat("groq", os.getenv("GROQ_API_KEY", ""),
+            return _test_openai_compat("groq", config.groq_api_key or os.getenv("GROQ_API_KEY", ""),
                                        "https://api.groq.com/openai/v1/models")
         if provider == "openai":
-            return _test_openai_compat("openai", os.getenv("OPENAI_API_KEY", ""),
+            return _test_openai_compat("openai", config.openai_api_key or os.getenv("OPENAI_API_KEY", ""),
                                         "https://api.openai.com/v1/models")
         if provider == "mistral":
-            return _test_openai_compat("mistral", os.getenv("MISTRAL_API_KEY", ""),
+            return _test_openai_compat("mistral", config.mistral_api_key or os.getenv("MISTRAL_API_KEY", ""),
                                         "https://api.mistral.ai/v1/models")
         if provider == "ollama":
             return _test_ollama()
@@ -31,7 +32,7 @@ def test_api_key(provider: str) -> dict:
 
 
 def _test_gemini() -> dict:
-    key = os.getenv("GEMINI_API_KEY", "")
+    key = (config.gemini_api_key or os.getenv("GEMINI_API_KEY", "")).strip().strip('"\'')
     if not key:
         return {"provider": "gemini", "ok": False, "message": "Clé vide."}
     url = "https://generativelanguage.googleapis.com/v1beta/models?key=" + key

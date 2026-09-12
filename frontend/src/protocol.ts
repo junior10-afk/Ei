@@ -93,6 +93,51 @@ export interface ProviderModelsMessage {
   message?: string;
 }
 
+export interface AgentThoughtMessage {
+  type: 'agent_thought';
+  thought: string;
+  iteration?: number;
+}
+
+export interface AgentPlanMessage {
+  type: 'agent_plan';
+  status: string;
+  query?: string;
+  steps?: string[];
+}
+
+export interface AgentTokenMessage {
+  type: 'agent_token';
+  token: string;
+  is_final?: boolean;
+}
+
+export interface ToolConfirmationRequestMessage {
+  type: 'tool_confirmation_request';
+  request_id: string;
+  tool_name: string;
+  description?: string;
+  arguments: Record<string, any>;
+  danger_level: string;
+}
+
+export interface TaskStatusMessage {
+  type: 'task_status';
+  task_id: string;
+  title: string;
+  status: string;
+  progress: number;
+  result?: string;
+  error?: string;
+}
+
+export interface RoutineTriggeredMessage {
+  type: 'routine_triggered';
+  id: string;
+  name: string;
+  time?: string;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -108,7 +153,13 @@ export type IncomingMessage =
   | LongResponseMessage
   | ApiKeyResultMessage
   | ModelsCatalogMessage
-  | ProviderModelsMessage;
+  | ProviderModelsMessage
+  | AgentThoughtMessage
+  | AgentPlanMessage
+  | AgentTokenMessage
+  | ToolConfirmationRequestMessage
+  | TaskStatusMessage
+  | RoutineTriggeredMessage;
 
 export interface UserInputMessage {
   type: 'user_input';
@@ -128,3 +179,10 @@ export interface UpdateSettingsMessage {
   type: 'update_settings';
   data: Record<string, any>;
 }
+
+export interface ToolConfirmationResponseMessage {
+  type: 'tool_confirmation_response';
+  request_id: string;
+  confirmed: boolean;
+}
+

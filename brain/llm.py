@@ -8,7 +8,6 @@ from brain.prompt import build_system_prompt
 class LLMCascade:
     def __init__(self):
         self.cooldowns: Dict[str, float] = {}
-        self.history: List[Dict[str, str]] = []
 
     def _is_available(self, provider: str) -> bool:
         until = self.cooldowns.get(provider, 0.0)
@@ -18,14 +17,37 @@ class LLMCascade:
         self.cooldowns[provider] = time.time() + duration_sec
         print(f"[LLM] Cooldown appliqué sur {provider} pour {duration_sec}s.")
 
+    def clear_cooldown(self, provider: Optional[str] = None):
+        if provider:
+            self.cooldowns.pop(provider, None)
+            print(f"[LLM] Cooldown réinitialisé pour {provider}.")
+        else:
+            self.cooldowns.clear()
+            print("[LLM] Tous les cooldowns ont été réinitialisés.")
+
+    @property
+    def history(self) -> List[Dict[str, str]]:
+        """Lit l'historique conversationnel directement depuis la session persistée en base SQLite."""
+        try:
+            from brain.session_memory import session_memory
+            return session_memory.get_recent_pairs(limit=6)
+        except Exception:
+            return []
+
     def add_history(self, role: str, text: str):
-        self.history.append({"role": role, "text": text})
-        if len(self.history) > 10:
-            self.history.pop(0)
+        """Enregistre le message dans la source unique de vérité SQLite."""
+        try:
+            from brain.session_memory import session_memory
+            if role == "user":
+                session_memory.add_user_message(text)
+            elif role == "assistant":
+                session_memory.add_assistant_message(text)
+        except Exception:
+            pass
 
     def _call_gemini(self, user_text: str, system_prompt: str, model: str = "gemini-2.5-flash",
                      max_tokens: int = 1024) -> Optional[str]:
-        api_key = config.gemini_api_key or os.getenv("GEMINI_API_KEY")
+        api_key = (config.gemini_api_key or os.getenv("GEMINI_API_KEY", "")).strip().strip('"\'')
         if not api_key:
             return None
 
@@ -45,32 +67,150 @@ class LLMCascade:
                 temperature=0.4,
                 max_output_tokens=max(max_tokens, 1024),
             )
-            # Gemini 2.5 "réfléchit" avant de répondre : ces tokens de réflexion
-            # sont comptés dans max_output_tokens et peuvent vider la réponse
-            # (texte vide -> faux échec -> message "renseignez une clé API").
-            # On coupe la réflexion pour les modèles flash, et on la borne
-            # pour les pro (budget minimal autorisé).
-            if "pro" in model:
-                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=128)
-            else:
+            # Gestion de la réflexion (thinking) selon le modèle :
+            # - Gemini 2.5 Flash accepte thinking_budget=0 pour réduire la latence.
+            # - Gemini Pro accepte thinking_budget=128 pour borner la réflexion.
+            # - Gemini 3.x Flash/Lite rejette thinking_budget=0 avec 400 INVALID_ARGUMENT (non supporté).
+            if "2.5-flash" in model:
                 cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            elif "pro" in model:
+                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=128)
 
-            response = client.models.generate_content(
-                model=model,
-                contents=full_user_msg,
-                config=types.GenerateContentConfig(**cfg_kwargs)
-            )
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=full_user_msg,
+                    config=types.GenerateContentConfig(**cfg_kwargs)
+                )
+            except Exception as e:
+                err_str = str(e)
+                # Si erreur de paramètre (ex: thinking_config rejeté sur ce modèle), réessayer immédiatement sans thinking_config
+                if "thinking_config" in cfg_kwargs and ("INVALID_ARGUMENT" in err_str or "400" in err_str):
+                    cfg_kwargs.pop("thinking_config", None)
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=full_user_msg,
+                        config=types.GenerateContentConfig(**cfg_kwargs)
+                    )
+                else:
+                    raise e
+
             if response and response.text:
                 return response.text.strip()
             print(f"[LLM] Gemini ({model}) a renvoyé une réponse vide (finishReason="
                   f"{getattr(response, 'candidates', None) and response.candidates[0].finish_reason}).")
         except Exception as e:
-            print(f"[LLM] Erreur Gemini: {e}")
-            self._set_cooldown("gemini", 60.0)
+            err_str = str(e)
+            print(f"[LLM] Erreur Gemini ({model}): {err_str[:180]}")
+            # Ne bloquer Gemini en cooldown que si la clé est invalide (403) ou si le modèle de base échoue
+            if "API_KEY_INVALID" in err_str or "403" in err_str:
+                self._set_cooldown("gemini", 120.0)
+            elif model == "gemini-2.5-flash":
+                self._set_cooldown("gemini", 30.0)
         return None
+
+    def _call_gemini_with_tools(self, messages: List[Dict], system_prompt: str,
+                                 gemini_tools, model: str = "gemini-2.5-flash",
+                                 max_tokens: int = 2048):
+        """
+        Appel Gemini avec Native Function Calling.
+        Retourne le response object complet (pas juste le texte) pour que l'agent loop
+        puisse inspecter les function_calls dans les candidates.
+
+        messages: liste de dicts {"role": "user"|"model"|"function", "parts": [...]}
+        gemini_tools: résultat de tool_registry.get_gemini_tools()
+        """
+        api_key = (config.gemini_api_key or os.getenv("GEMINI_API_KEY", "")).strip().strip('"\'')
+        if not api_key:
+            return None
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+
+            cfg_kwargs = dict(
+                system_instruction=system_prompt,
+                temperature=0.4,
+                max_output_tokens=max(max_tokens, 1024),
+                tools=gemini_tools or [],
+            )
+
+            # Thinking config selon le modèle
+            if "2.5-flash" in model:
+                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            elif "pro" in model:
+                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=256)
+
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=messages,
+                    config=types.GenerateContentConfig(**cfg_kwargs)
+                )
+            except Exception as e:
+                err_str = str(e)
+                if "thinking_config" in cfg_kwargs and ("INVALID_ARGUMENT" in err_str or "400" in err_str):
+                    cfg_kwargs.pop("thinking_config", None)
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=messages,
+                        config=types.GenerateContentConfig(**cfg_kwargs)
+                    )
+                else:
+                    raise e
+
+            return response
+
+        except Exception as e:
+            err_str = str(e)
+            print(f"[LLM] Erreur Gemini FC ({model}): {err_str[:200]}")
+            if "API_KEY_INVALID" in err_str or "403" in err_str:
+                self._set_cooldown("gemini", 120.0)
+            elif model == "gemini-2.5-flash":
+                self._set_cooldown("gemini", 30.0)
+        return None
+
+    def _call_openai_with_tools(self, provider: str, base_url: str, api_key: str,
+                                 model: str, messages: List[Dict], openai_tools: List[Dict],
+                                 max_tokens: int = 2048):
+        """
+        Appel OpenAI-compatible avec Native Function Calling.
+        Retourne le dict de response complet pour inspection des tool_calls.
+        """
+        api_key = (api_key or "").strip().strip('"\'')
+        if not api_key:
+            return None
+
+        try:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.4,
+                "max_tokens": max(max_tokens, 512),
+                "tools": openai_tools,
+                "tool_choice": "auto"
+            }
+            res = requests.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=60)
+            if res.status_code == 200:
+                return res.json()
+            else:
+                print(f"[LLM] Erreur {provider} FC ({res.status_code}): {res.text[:200]}")
+                self._set_cooldown(provider, 60.0)
+        except Exception as e:
+            print(f"[LLM] Exception {provider} FC: {str(e)[:200]}")
+            self._set_cooldown(provider, 60.0)
+        return None
+
 
     def _call_openai_compatible(self, provider: str, base_url: str, api_key: str, model: str, user_text: str, system_prompt: str,
                                 max_tokens: int = 1024) -> Optional[str]:
+        api_key = (api_key or "").strip().strip('"\'')
         if not api_key:
             return None
 
@@ -96,10 +236,10 @@ class LLMCascade:
                 data = res.json()
                 return data["choices"][0]["message"]["content"].strip()
             else:
-                print(f"[LLM] Erreur {provider} ({res.status_code}): {res.text}")
+                print(f"[LLM] Erreur {provider} ({res.status_code}): {res.text[:180]}")
                 self._set_cooldown(provider, 60.0)
         except Exception as e:
-            print(f"[LLM] Exception {provider}: {e}")
+            print(f"[LLM] Exception {provider}: {str(e)[:180]}")
             self._set_cooldown(provider, 60.0)
         return None
 
@@ -121,12 +261,16 @@ class LLMCascade:
             return None
         provider = (model.get("provider") or "").lower()
         model_name = model.get("model") or ""
-        max_tokens = int(model.get("max_tokens", 300))
+        max_tokens = int(model.get("max_tokens", 2048))
         key_env = model.get("key_env") or ""
-        api_key = os.getenv(key_env, "") if key_env else ""
+        api_key = (os.getenv(key_env, "") if key_env else "").strip().strip('"\'')
 
         if provider == "gemini":
             ans = self._call_gemini(user_text, system_prompt, model=model_name, max_tokens=max_tokens)
+            # Si un modèle spécifique (ex: preview sans quota ou expérimental) échoue, repli immédiat sur gemini-2.5-flash
+            if not ans and model_name != "gemini-2.5-flash":
+                print(f"[LLM] Repli automatique de {model_name} vers gemini-2.5-flash...")
+                ans = self._call_gemini(user_text, system_prompt, model="gemini-2.5-flash", max_tokens=max_tokens)
         elif provider == "ollama":
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
             ans = self._call_openai_compatible("ollama", base_url, "ollama", model_name or "llama3.2",

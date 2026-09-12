@@ -44,11 +44,7 @@ def check_local_reply(text: str) -> Optional[str]:
         template = random.choice(THANKS_REPLIES)
         return template.format(user_name)
 
-    # 3. Qui es-tu ? (question courte seule, pas enfouie dans une phrase plus longue)
-    if re.fullmatch(r"(qui es[- ]tu\??|qui (es[- ]tu|est[- ]il) exactement\??|comment tu t'appelles\??|quel est ton nom\??|c'est quoi [eé]i\??|presente[- ]toi)[\s!.]*", clean):
-        return f"Je suis {assistant_name}, votre assistant personnel connecté. Posez-moi ce que vous voulez, je réponds vraiment maintenant."
-
-    # 4. Heure actuelle
+    # 3. Heure actuelle (utilitaire déterministe immédiat)
     if re.search(r"\b(quelle heure est-il|l'heure qu'il est|donne-moi l'heure|il est quelle heure)\b", clean):
         now = datetime.datetime.now()
         minute = now.minute

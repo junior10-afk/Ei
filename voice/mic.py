@@ -44,11 +44,8 @@ class MicrophoneListener:
         return float(np.sqrt(np.mean(float_chunk ** 2)))
 
     def _listen_loop(self):
-        """Boucle de détection VAD et enregistrement de phrases."""
+        """Boucle de détection VAD et enregistrement de phrases avec calibration et anti-écho."""
         device_index = config.get("mic_device_index", None)
-        sensitivity = float(config.get("mic_sensitivity_rms", 0.015))
-        silence_limit = float(config.get("silence_duration_sec", 1.2))
-        max_phrase_time = float(config.get("max_phrase_sec", 15.0))
 
         try:
             with sd.InputStream(
@@ -58,10 +55,29 @@ class MicrophoneListener:
                 blocksize=CHUNK_SAMPLES,
                 device=device_index
             ) as stream:
+                # 0. Calibration initiale du bruit ambiant (1 seconde)
+                print("[Microphone] Calibration du bruit ambiant (1s)...")
+                calib_samples = []
+                for _ in range(int(1.0 / CHUNK_DURATION)):
+                    if not self._running:
+                        return
+                    data, _ = stream.read(CHUNK_SAMPLES)
+                    calib_samples.append(self._calculate_rms(data.flatten()))
+                
+                ambient_rms = float(np.mean(calib_samples)) if calib_samples else 0.01
+                auto_thresh = max(0.010, min(0.06, ambient_rms * 1.8))
+                print(f"[Microphone] Bruit ambiant: {ambient_rms:.4f} -> Seuil VAD calculé: {auto_thresh:.4f}")
+
                 buffer = []
                 is_recording_speech = False
                 silence_start_time = None
                 phrase_start_time = None
+                
+                # Gestion anti-écho et barge-in
+                was_speaking = False
+                speaking_start_time = 0.0
+                last_speaking_end_time = 0.0
+                ANTI_ECHO_WINDOW = 0.35  # 350ms après la parole TTS
 
                 while self._running:
                     # 1. Anti-larsen & Mute
@@ -69,25 +85,71 @@ class MicrophoneListener:
                         time.sleep(0.1)
                         continue
 
-                    # Si l'assistant parle, on n'enregistre pas pour éviter l'écho,
-                    # mais on laisse la possibilité de couper via clavier / bouton
-                    if state_manager.is_speaking:
-                        time.sleep(0.05)
+                    # Lecture dynamique de la configuration à chaque itération
+                    cfg_sens = config.get("mic_sensitivity_rms", None)
+                    if cfg_sens is not None and float(cfg_sens) > 0:
+                        sensitivity = max(float(cfg_sens), auto_thresh)
+                    else:
+                        sensitivity = auto_thresh
+                    
+                    silence_limit = float(config.get("silence_duration_sec", 1.2))
+                    max_phrase_time = float(config.get("max_phrase_sec", 15.0))
+
+                    # 2. Gestion état TTS (parole de l'assistant)
+                    is_speaking = state_manager.is_speaking
+                    now = time.time()
+
+                    if is_speaking:
+                        if not was_speaking:
+                            was_speaking = True
+                            speaking_start_time = now
+                            # Si on était en train d'enregistrer, annuler pour ne pas capturer le TTS
+                            buffer = []
+                            is_recording_speech = False
+                            silence_start_time = None
+
+                        data, _ = stream.read(CHUNK_SAMPLES)
+                        chunk = data.flatten()
+                        rms = self._calculate_rms(chunk)
+
+                        # Fenêtre de grâce initiale de 350ms avant d'autoriser le barge-in
+                        if (now - speaking_start_time) > ANTI_ECHO_WINDOW:
+                            # Détection d'interruption vocale distincte
+                            if rms >= sensitivity * 2.5:
+                                print("[Microphone] Interruption vocale (Barge-In) détectée !")
+                                tts_engine.stop()
+                                state_manager.set_state(AssistantState.LISTENING)
+                                is_recording_speech = True
+                                phrase_start_time = now
+                                buffer = [chunk]
+                                silence_start_time = None
+                                was_speaking = False
+                                continue
+                        time.sleep(0.02)
                         continue
 
-                    data, overflowed = stream.read(CHUNK_SAMPLES)
-                    if overflowed:
-                        pass
+                    # Si l'assistant vient de se taire, appliquer la fenêtre anti-écho (réverbération pièce)
+                    if was_speaking:
+                        was_speaking = False
+                        last_speaking_end_time = now
 
+                    if (now - last_speaking_end_time) < ANTI_ECHO_WINDOW:
+                        # Vider le buffer matériel sans déclencher de transcription
+                        stream.read(CHUNK_SAMPLES)
+                        time.sleep(0.02)
+                        continue
+
+                    # 3. Capture audio normale
+                    data, overflowed = stream.read(CHUNK_SAMPLES)
                     chunk = data.flatten()
                     rms = self._calculate_rms(chunk)
 
-                    # Si on est en écoute active et que l'utilisateur parle
+                    # Si l'utilisateur parle
                     if rms >= sensitivity:
                         if not is_recording_speech:
                             # Début de la parole détecté
                             is_recording_speech = True
-                            phrase_start_time = time.time()
+                            phrase_start_time = now
                             buffer = [chunk]
                             state_manager.set_state(AssistantState.LISTENING)
                         else:
@@ -97,8 +159,8 @@ class MicrophoneListener:
                         if is_recording_speech:
                             buffer.append(chunk)
                             if silence_start_time is None:
-                                silence_start_time = time.time()
-                            elif (time.time() - silence_start_time) >= silence_limit:
+                                silence_start_time = now
+                            elif (now - silence_start_time) >= silence_limit:
                                 # Fin de phrase après silence
                                 self._process_phrase(buffer, phrase_start_time)
                                 buffer = []
@@ -106,7 +168,7 @@ class MicrophoneListener:
                                 silence_start_time = None
 
                     # Limite de durée max
-                    if is_recording_speech and phrase_start_time and (time.time() - phrase_start_time) >= max_phrase_time:
+                    if is_recording_speech and phrase_start_time and (now - phrase_start_time) >= max_phrase_time:
                         self._process_phrase(buffer, phrase_start_time)
                         buffer = []
                         is_recording_speech = False

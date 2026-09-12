@@ -3,18 +3,50 @@ Write-Host "   Lancement de EI - Assistant Vocal & HUD 3D" -ForegroundColor Cyan
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$pythonExe = "C:\Users\lemou\AppData\Local\Programs\Python\Python313\python.exe"
+$pythonCmd = $null
+$pythonArgs = @()
 
-if (-not (Test-Path $pythonExe)) {
-    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($pythonCmd) {
-        $pythonExe = $pythonCmd.Source
-    } else {
-        Write-Host "[ERREUR] Python 3.13 introuvable." -ForegroundColor Red
-        Read-Host "Appuyez sur Entrée pour quitter..."
-        exit 1
+if (Test-Path ".venv\Scripts\python.exe") {
+    $pythonCmd = ".venv\Scripts\python.exe"
+} elseif (Test-Path "venv\Scripts\python.exe") {
+    $pythonCmd = "venv\Scripts\python.exe"
+} else {
+    try {
+        $null = & python -c "import websockets" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $pythonCmd = "python"
+        }
+    } catch {}
+
+    if (-not $pythonCmd) {
+        try {
+            $null = & py -3.13 -c "import websockets" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $pythonCmd = "py"
+                $pythonArgs = @("-3.13")
+            }
+        } catch {}
+    }
+
+    if (-not $pythonCmd) {
+        $cmd = Get-Command python -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $pythonCmd = $cmd.Source
+        } else {
+            $py = Get-Command py -ErrorAction SilentlyContinue
+            if ($py) {
+                $pythonCmd = "py"
+                $pythonArgs = @("-3")
+            }
+        }
     }
 }
 
-Write-Host "Démarrage du système avec $pythonExe..." -ForegroundColor Green
-& $pythonExe run.py
+if (-not $pythonCmd) {
+    Write-Host "[ERREUR] Aucun interpreteur Python trouve." -ForegroundColor Red
+    Read-Host "Appuyez sur Entrée pour quitter..."
+    exit 1
+}
+
+Write-Host "Démarrage du système avec $pythonCmd $pythonArgs..." -ForegroundColor Green
+& $pythonCmd $pythonArgs run.py
