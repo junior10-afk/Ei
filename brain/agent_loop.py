@@ -257,7 +257,7 @@ HISTORIQUE RÉCENT :
                         })
 
                         exec_res = tool_registry.execute(tool_name, tool_args)
-                        obs = exec_res.get("result") or exec_res.get("speech") or exec_res.get("error")
+                        obs = exec_res.get("error") or exec_res.get("result") or exec_res.get("speech")
                         session_memory.add_tool_interaction(tool_name, tool_args, str(obs))
 
                         response_parts.append(types.Part.from_function_response(
@@ -357,7 +357,7 @@ HISTORIQUE RÉCENT :
                         })
 
                         exec_res = tool_registry.execute(fn_name, fn_args)
-                        obs = exec_res.get("result") or exec_res.get("speech") or exec_res.get("error")
+                        obs = exec_res.get("error") or exec_res.get("result") or exec_res.get("speech")
                         session_memory.add_tool_interaction(fn_name, fn_args, str(obs))
 
                         messages.append({
@@ -412,21 +412,21 @@ VOICE_SUMMARY: [Synthèse orale concise de 1 à 2 phrases sans Markdown]
             if not llm_text or self.is_cancelled():
                 break
 
-            # Détection d'action
+            # Détection d'action (JSON à accolades équilibrées, robuste aux params imbriqués)
             action_data = None
-            json_m = re.search(r"ACTION:\s*(\{[\s\S]*?\})", llm_text)
+            json_m = re.search(r"ACTION:\s*(\{.*)", llm_text, re.DOTALL)
             if json_m:
                 try:
-                    action_data = json.loads(json_m.group(1).strip())
+                    action_data, _ = json.JSONDecoder().raw_decode(json_m.group(1).strip())
                 except Exception:
-                    pass
+                    action_data = None
 
             if action_data and "action" in action_data:
                 act = action_data["action"]
                 params = action_data.get("params", {})
                 bus.broadcast_threadsafe({"type": "action", "action": act, "params": params})
                 res = tool_registry.execute(act, params)
-                obs = res.get("result") or res.get("speech") or res.get("error")
+                obs = res.get("error") or res.get("result") or res.get("speech")
                 session_memory.add_tool_interaction(act, params, str(obs))
                 thought_trace.append(f"Étape {iteration} - {act} -> Observation: {str(obs)[:500]}")
                 continue
