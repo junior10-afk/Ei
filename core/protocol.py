@@ -54,3 +54,10 @@ class GetSettingsMessage(BaseModel):
 class UpdateSettingsMessage(BaseModel):
     type: Literal["update_settings"] = "update_settings"
     data: Dict[str, Any]
+
+# Types avec validation activée côté bus (messages HUD -> Runtime typés)
+VALIDATORS = {
+    "user_input": UserInputMessage,
+    "toggle_mic": ToggleMicMessage,
+    "update_settings": UpdateSettingsMessage,
+}

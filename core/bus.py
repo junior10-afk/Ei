@@ -120,6 +120,15 @@ class MessageBus:
                     data = json.loads(raw_msg)
                     msg_type = data.get("type", "")
                     if msg_type in self._handlers:
+                        # Validation Pydantic optionnelle (core.protocol) pour les types connus
+                        try:
+                            from core.protocol import VALIDATORS
+                            validator = VALIDATORS.get(msg_type)
+                            if validator is not None:
+                                validator(**data)
+                        except Exception as v_err:
+                            await self.send_to(websocket, {"type": "error", "message": f"Message invalide ({msg_type}): {v_err}"})
+                            continue
                         await self._handlers[msg_type](data, websocket)
                     else:
                         print(f"[Bus] Type de message inconnu reçu: {msg_type}")

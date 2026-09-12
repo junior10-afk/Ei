@@ -58,15 +58,15 @@ def run_tests():
     scheduler.cancel_reminder(rem_id)
     print("Scheduler OK!")
 
-    print("\n=== TEST 5: Dispatcher Intelligent (Requêtes Simples vs Composites) ===")
-    simple = dispatcher._match_deterministic_tools("ouvre le bloc-notes")
-    print(f"Simple ('ouvre le bloc-notes') -> intercepté: {simple is not None}")
-    assert simple is not None and simple["action"] == "open_app"
+    print("\n=== TEST 5: Dispatcher Intelligent (Repli hors-ligne vs Agent) ===")
+    fallback = dispatcher._route_query("ouvre chrome")
+    print(f"Repli hors-ligne ('ouvre chrome') -> règle: {fallback is not None}")
+    assert fallback is not None and fallback["action"] == "open_app"
 
-    composite = dispatcher._match_deterministic_tools("ouvre chrome et cherche la météo à Tokyo")
-    print(f"Composite ('ouvre chrome et cherche...') -> délégué à l'agent: {composite is None}")
-    assert composite is None
-    print("Dispatcher Composite/Simple OK!")
+    no_route = dispatcher._route_query("prépare-moi un comparatif de licious vs stripe")
+    print(f"Requête libre -> déléguée à l'agent (pas de règle): {no_route is None}")
+    assert no_route is None
+    print("Dispatcher LLM-first / Repli OK!")
 
     print("\n=== TEST 6: Double Restitution de l'AgentEngine (Voix / HUD Markdown) ===")
     voice_s, detailed_m = agent_engine._parse_dual_output("""
