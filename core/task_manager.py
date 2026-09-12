@@ -1,10 +1,12 @@
 import time
 import uuid
 import threading
+import traceback
 from typing import Callable, Dict, Any, Optional, List
 from core.bus import bus
 from core.database import db
 from core.state import state_manager
+from core.logging_config import log_exception
 
 class AgentTask:
     def __init__(self, task_id: str, title: str, func: Callable, args: tuple = (), kwargs: dict = None):
@@ -87,8 +89,8 @@ class TaskManager:
 
         try:
             db.update_task_status(task_id, status="cancelled", completed_at=task.completed_at)
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Statut annulé tâche " + task_id, e)
 
         bus.broadcast_threadsafe({
             "type": "task_status",
@@ -108,8 +110,8 @@ class TaskManager:
         task.started_at = time.time()
         try:
             db.update_task_status(task.task_id, status="running", progress=10, started_at=task.started_at)
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Statut running tâche " + task.task_id, e)
 
         bus.broadcast_threadsafe({
             "type": "task_status",
@@ -143,8 +145,8 @@ class TaskManager:
                     result=str(res)[:1000],
                     completed_at=task.completed_at
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log_exception("Statut completed tâche " + task.task_id, e)
 
             bus.broadcast_threadsafe({
                 "type": "task_status",
@@ -161,8 +163,8 @@ class TaskManager:
                 from core.utils import play_chime
                 try:
                     play_chime("ack")
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_exception("Chime ack tâche", e)
                 tts_engine.speak(f"Monsieur, la tâche « {task.title} » est terminée.", priority=2)
 
         except Exception as e:
@@ -181,8 +183,8 @@ class TaskManager:
                     error=str(e),
                     completed_at=task.completed_at
                 )
-            except Exception:
-                pass
+            except Exception as log_e:
+                log_exception("Statut failed tâche " + task.task_id, log_e)
 
             bus.broadcast_threadsafe({
                 "type": "task_status",
@@ -212,8 +214,8 @@ class TaskManager:
             for row in saved:
                 if row["task_id"] == task_id:
                     return row
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Lecture tâche " + str(task_id), e)
         return None
 
     def list_tasks(self) -> List[Dict[str, Any]]:
@@ -239,8 +241,8 @@ class TaskManager:
                         "status": s["status"],
                         "progress": s.get("progress", 0)
                     })
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Liste des tâches", e)
 
         return results
 

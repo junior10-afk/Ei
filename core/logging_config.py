@@ -8,6 +8,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOGS_DIR = BASE_DIR / "logs"
 LOG_FILE = LOGS_DIR / "ei.log"
 
+def log_exception(context: str, exc: BaseException) -> None:
+    """Journalise une exception interceptée (remplace les 'except Exception: pass' silencieux)."""
+    logging.getLogger("ei").error("%s: %s\n%s", context, exc, traceback.format_exc())
+
+
 def setup_logging(verbose: bool = False) -> logging.Logger:
     """Configure la journalisation centralisée avec fichier tournant et console."""
     LOGS_DIR.mkdir(parents=True, exist_ok=True)

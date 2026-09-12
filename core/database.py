@@ -3,8 +3,11 @@ import time
 import json
 import sqlite3
 import threading
+import traceback
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+
+from core.logging_config import log_exception
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -235,8 +238,8 @@ class DatabaseManager:
                 meta = {}
                 try:
                     meta = json.loads(r["metadata"]) if r["metadata"] else {}
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_exception("Décodage metadata message", e)
                 results.append({
                     "role": r["role"],
                     "content": r["content"],
@@ -308,8 +311,8 @@ class DatabaseManager:
                             "category": row["category"],
                             "updated_at": row["updated_at"]
                         }
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_exception("Recherche fait FTS5/LIKE", e)
 
             # 3. Correspondance partielle LIKE (clé ou valeur)
             cursor.execute("""
@@ -404,8 +407,8 @@ class DatabaseManager:
             data = {k: {"value": v, "timestamp": time.time()} for k, v in facts.items()}
             with open(LEGACY_MEMORY_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Export legacy memory.json", e)
 
     # --- Persistance des Tâches ---
 
@@ -457,6 +460,43 @@ class DatabaseManager:
                 FROM tasks ORDER BY created_at DESC LIMIT ?
             """, (limit,))
             return [dict(r) for r in cursor.fetchall()]
+
+    # --- Persistance des Rappels ---
+
+    def add_reminder_persisted(self, reminder_id: str, label: str, message: str, trigger_time: float) -> None:
+        with self._db_lock, self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO reminders (id, label, message, trigger_time, triggered, created_at)
+                VALUES (?, ?, ?, ?, 0, ?)
+            """, (reminder_id, label, message, trigger_time, time.time()))
+            conn.commit()
+
+    def get_pending_reminders(self) -> List[Dict[str, Any]]:
+        with self._db_lock, self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, label, message, trigger_time FROM reminders WHERE triggered = 0"
+            )
+            return [dict(r) for r in cursor.fetchall()]
+
+    def mark_reminder_fired(self, reminder_id: str) -> None:
+        with self._db_lock, self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE reminders SET triggered = 1 WHERE id = ?", (reminder_id,))
+            conn.commit()
+
+    def fail_stale_tasks(self) -> int:
+        """Au démarrage : toute tâche 'running'/'queued' en base vient d'un crash précédent."""
+        with self._db_lock, self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE tasks SET status = 'failed',
+                    error = COALESCE(error, 'Interrompue par redémarrage')
+                WHERE status IN ('running', 'queued')
+            """)
+            conn.commit()
+            return cursor.rowcount
 
     # --- Persistance des Routines ---
 

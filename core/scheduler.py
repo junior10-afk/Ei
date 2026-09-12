@@ -1,10 +1,26 @@
 import time
 import uuid
 import threading
+import traceback
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from core.bus import bus
 from core.database import db
 from core.state import state_manager
+from core.logging_config import log_exception
+
+
+def is_routine_due(time_str: str, last_run_date, now_dt=None) -> bool:
+    """True si la routine doit se déclencher, AVEC rattrapage si l'heure est passée aujourd'hui."""
+    now_dt = now_dt or datetime.now()
+    try:
+        h, m = (int(x) for x in str(time_str).split(":"))
+    except Exception:
+        return False
+    scheduled = now_dt.replace(hour=h, minute=m, second=0, microsecond=0)
+    if now_dt < scheduled:
+        return False
+    return last_run_date != now_dt.strftime("%Y-%m-%d")
 
 class Scheduler:
     """
@@ -34,6 +50,7 @@ class Scheduler:
         self._running = True
         
         self._load_routines_from_db()
+        self._restore_reminders()
         self._thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._thread.start()
         self._initialized = True
@@ -66,6 +83,11 @@ class Scheduler:
                 "triggered": False
             }
 
+        try:
+            db.add_reminder_persisted(reminder_id, label, message, trigger_time)
+        except Exception as e:
+            print(f"[Scheduler] Erreur persistance rappel: {e}")
+
         bus.broadcast_threadsafe({
             "type": "reminder_scheduled",
             "id": reminder_id,
@@ -82,6 +104,20 @@ class Scheduler:
                 del self._reminders[reminder_id]
                 return True
         return False
+
+    def _restore_reminders(self):
+        """Recharge les rappels non déclenchés depuis SQLite (survit au redémarrage)."""
+        try:
+            for row in db.get_pending_reminders():
+                with self._rem_lock:
+                    self._reminders[row["id"]] = {
+                        "id": row["id"], "label": row["label"], "message": row["message"],
+                        "trigger_time": row["trigger_time"], "triggered": False,
+                    }
+            if self._reminders:
+                print(f"[Scheduler] {len(self._reminders)} rappel(s) rechargé(s) depuis SQLite.")
+        except Exception as e:
+            print(f"[Scheduler] Rechargement des rappels impossible: {e}")
 
     def add_daily_routine(self, routine_id: str, name: str, time_str: str, prompt: str, enabled: bool = True):
         """Ajoute ou modifie une routine quotidienne (format time_str: HH:MM)."""
@@ -144,10 +180,9 @@ class Scheduler:
             with self._rem_lock:
                 for r_id, routine in self._routines.items():
                     if bool(routine.get("enabled", True)):
-                        if routine.get("time_str") == now_time_str:
-                            if routine.get("last_run_date") != today_str:
-                                routine["last_run_date"] = today_str
-                                to_trigger_routines.append(routine)
+                        if is_routine_due(routine.get("time_str", ""), routine.get("last_run_date")):
+                            routine["last_run_date"] = today_str
+                            to_trigger_routines.append(routine)
 
             for routine in to_trigger_routines:
                 self._trigger_routine(routine, today_str)
@@ -159,8 +194,8 @@ class Scheduler:
         try:
             from core.utils import play_chime
             play_chime("timer")
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Chime rappel", e)
 
         bus.broadcast_threadsafe({
             "type": "reminder_triggered",
@@ -184,16 +219,16 @@ class Scheduler:
 
         try:
             db.update_routine_last_run(routine_id, date_str)
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Mise à jour last_run routine", e)
 
         print(f"[Scheduler] Déclenchement de la routine quotidienne: « {name} »")
 
         try:
             from core.utils import play_chime
             play_chime("wake")
-        except Exception:
-            pass
+        except Exception as e:
+            log_exception("Chime routine", e)
 
         bus.broadcast_threadsafe({
             "type": "routine_triggered",
