@@ -9,7 +9,7 @@ from core.config import config
 from tools.registry import tool_registry
 from brain.llm import llm_cascade
 from brain.session_memory import session_memory
-from brain.multi_agents import detect_specialist_for_query, AgentProfile
+from brain.multi_agents import detect_specialist_for_query, AgentProfile, ORCHESTRATOR
 
 class AgentEngine:
     """
@@ -48,33 +48,41 @@ class AgentEngine:
             })
             time.sleep(0.012)
 
-    def _generate_dynamic_plan(self, user_text: str, specialist: AgentProfile) -> List[str]:
-        """Génère un plan de travail personnalisé selon la demande."""
-        q = user_text.lower()
-        if any(w in q for w in ["voyage", "itinéraire", "vol", "hôtel", "trajet"]):
-            return [
-                "1. Recherche des destinations et conditions météo locales",
-                "2. Analyse des options d'itinéraire et de transport",
-                "3. Synthèse du programme détaillé et recommandations"
-            ]
-        elif any(w in q for w in ["code", "programme", "application", "développe", "script", "bug"]):
-            return [
-                "1. Analyse des exigences techniques et architecture du code",
-                "2. Exécution et vérification sécurisée dans la sandbox locale",
-                "3. Synthèse structurée et documentation du résultat"
-            ]
-        elif any(w in q for w in ["compare", "analyse", "audit", "recherche approfondie", "marché"]):
-            return [
-                "1. Collecte multi-sources des informations récentes sur le Web",
-                "2. Évaluation comparative et extraction des données clés",
-                "3. Restitution du rapport exhaustif pour le HUD"
-            ]
-        else:
-            return [
-                f"1. Analyse contextuelle par l'agent ({specialist.role_title})",
-                "2. Exécution des outils et vérification des données",
-                "3. Restitution vocale synthétique et détaillée"
-            ]
+    COMPLEX_KEYWORDS = [
+        "voyage", "itinéraire", "programme", "organise", "planifie", "compare",
+        "développe", "projet", "stratégie", "analyse complète", "étapes", "recherche approfondie"
+    ]
+
+    @staticmethod
+    def _is_complex_query(text: str) -> bool:
+        q = (text or "").lower()
+        return any(k in q for k in AgentEngine.COMPLEX_KEYWORDS)
+
+    def _build_llm_plan(self, user_text: str, specialist: AgentProfile) -> List[str]:
+        """Fait générer le plan PAR LE LLM. Jamais bloquant : [] en cas d'échec."""
+        planning_prompt = (
+            "Tu es un planificateur. Décompose la demande en 3 à 5 étapes concrètes, exécutables "
+            "par un agent disposant d'outils (web_search, fetch_webpage, fichiers, code, système).\n"
+            "Réponds UNIQUEMENT par une liste JSON de chaînes, ex:\n"
+            '["Recherche des options via web_search", "Extraction des données clés", "Rédaction de la synthèse"]\n\n'
+            f"Demande : {user_text}"
+        )
+        try:
+            raw = llm_cascade.ask_with_system(
+                planning_prompt,
+                "Tu produis uniquement du JSON valide, sans texte autour."
+            )
+            if not raw:
+                return []
+            m = re.search(r"\[[\s\S]*\]", raw)
+            if not m:
+                return []
+            steps = json.loads(m.group(0))
+            if isinstance(steps, list) and steps and all(isinstance(s, str) for s in steps):
+                return steps[:5]
+        except Exception as e:
+            print(f"[AgentEngine] Erreur génération de plan: {e}")
+        return []
 
     def run(self, user_query: str, model_override: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
         self._cancel_event.clear()
@@ -93,23 +101,22 @@ class AgentEngine:
             "thought": f"Analyse : {user_text[:60]}... Spécialiste : {specialist.role_title}"
         })
 
-        # 3. Décomposition dynamique de tâche si complexe
-        is_complex = any(k in user_text.lower() for k in [
-            "voyage", "itinéraire", "programme", "organise", "planifie", "compare",
-            "développe", "projet", "stratégie", "analyse complète", "étapes", "recherche approfondie"
-        ])
-
-        if is_complex:
-            steps = self._generate_dynamic_plan(user_text, specialist)
+        # 3. Plan de travail généré par le LLM si la demande est complexe
+        plan = self._build_llm_plan(user_text, specialist) if self._is_complex_query(user_text) else []
+        if plan:
             bus.broadcast_threadsafe({
                 "type": "agent_plan",
                 "status": "planning",
                 "query": user_text,
-                "steps": steps
+                "steps": plan
             })
 
         # 4. Construction du System Prompt avec historique unifié SQLite
         history_str = session_memory.get_history_context(max_items=6)
+        plan_block = (
+            "PLAN DE TRAVAIL (à suivre ; réévalue mentalement après chaque observation d'outil) :\n"
+            + "\n".join("- " + s for s in plan)
+        ) if plan else ""
         system_prompt = f"""Tu es {assistant_name}, un agent IA autonome intégré au poste de {user_name}.
 Rôle actif : {specialist.role_title}.
 Consigne du rôle : {specialist.system_instruction}
@@ -122,6 +129,7 @@ RÈGLES CAPITALES :
    - Conclus toujours avec une ligne :
      VOICE_SUMMARY: [Une synthèse orale concise de 1 à 2 phrases percutantes, naturelle, sans markdown ni astérisques, qui sera lue à haute voix].
 
+{plan_block}
 HISTORIQUE RÉCENT :
 {history_str}
 """
@@ -394,7 +402,12 @@ VOICE_SUMMARY: [Synthèse orale concise de 1 à 2 phrases sans Markdown]
             ctx = "\n".join(thought_trace) if thought_trace else "Début de l'analyse."
             llm_text = llm_cascade.ask_with_model(user_text, model_override, f"{prompt_with_tools}\nProgression :\n{ctx}")
             if not llm_text and not self.is_cancelled():
-                llm_text = llm_cascade.ask(f"Demande : {user_text}\nProgression : {ctx}")
+                llm_text = llm_cascade.ask_with_system(
+                    f"Demande : {user_text}\nProgression : {ctx}",
+                    f"{prompt_with_tools}\nProgression :\n{ctx}"
+                )
+                if not llm_text and not self.is_cancelled():
+                    llm_text = llm_cascade.ask(f"Demande : {user_text}\nProgression : {ctx}")
 
             if not llm_text or self.is_cancelled():
                 break

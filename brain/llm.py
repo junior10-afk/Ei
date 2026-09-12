@@ -287,73 +287,57 @@ class LLMCascade:
                 return None
             ans = self._call_openai_compatible(provider, base_url, api_key, model_name,
                                                user_text, system_prompt, max_tokens=max_tokens)
-        if ans:
-            self.add_history("user", user_text)
-            self.add_history("assistant", ans)
         return ans
 
-    def ask(self, user_text: str) -> str:
-        """Exécute la cascade selon le cerveau préféré et les clés disponibles."""
-        system_prompt = build_system_prompt()
+    def ask_with_system(self, user_text: str, system_prompt: str) -> Optional[str]:
+        """Cascade multi-providers avec un system prompt IMPOSÉ par l'appelant."""
         pref = config.get("preferred_brain", "gemini").lower()
-
-        # Liste des providers à tester dans l'ordre
-        providers = []
         if pref in ["gemini", "auto"]:
-            providers.extend(["gemini", "groq", "openai", "mistral", "ollama"])
+            providers = ["gemini", "groq", "openai", "mistral", "ollama"]
         elif pref == "groq":
-            providers.extend(["groq", "gemini", "openai", "ollama"])
+            providers = ["groq", "gemini", "openai", "ollama"]
         elif pref == "openai":
-            providers.extend(["openai", "gemini", "groq", "ollama"])
+            providers = ["openai", "gemini", "groq", "ollama"]
         elif pref == "ollama":
-            providers.extend(["ollama", "gemini", "groq"])
+            providers = ["ollama", "gemini", "groq"]
         else:
             providers = ["gemini", "groq", "openai", "ollama"]
 
         for prov in providers:
             if not self._is_available(prov):
                 continue
-
             if prov == "gemini":
                 ans = self._call_gemini(user_text, system_prompt)
-                if ans:
-                    self.add_history("user", user_text)
-                    self.add_history("assistant", ans)
-                    return ans
-
-            elif prov == "groq":
-                groq_key = config.groq_api_key or os.getenv("GROQ_API_KEY")
-                if groq_key:
-                    ans = self._call_openai_compatible("groq", "https://api.groq.com/openai/v1", groq_key, "llama-3.3-70b-versatile", user_text, system_prompt)
-                    if ans:
-                        self.add_history("user", user_text)
-                        self.add_history("assistant", ans)
-                        return ans
-
-            elif prov == "openai":
-                openai_key = config.openai_api_key or os.getenv("OPENAI_API_KEY")
-                if openai_key:
-                    ans = self._call_openai_compatible("openai", "https://api.openai.com/v1", openai_key, "gpt-4o-mini", user_text, system_prompt)
-                    if ans:
-                        self.add_history("user", user_text)
-                        self.add_history("assistant", ans)
-                        return ans
-
-            elif prov == "mistral":
-                mistral_key = config.mistral_api_key or os.getenv("MISTRAL_API_KEY")
-                if mistral_key:
-                    ans = self._call_openai_compatible("mistral", "https://api.mistral.ai/v1", mistral_key, "mistral-small-latest", user_text, system_prompt)
-                    if ans:
-                        self.add_history("user", user_text)
-                        self.add_history("assistant", ans)
-                        return ans
-
             elif prov == "ollama":
-                ans = self._call_ollama(user_text, system_prompt)
-                if ans:
-                    self.add_history("user", user_text)
-                    self.add_history("assistant", ans)
-                    return ans
+                base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+                model = os.getenv("OLLAMA_MODEL", "llama3.2")
+                ans = self._call_openai_compatible("ollama", base_url, "ollama", model,
+                                                   user_text, system_prompt)
+            else:
+                base_urls = {
+                    "groq": "https://api.groq.com/openai/v1",
+                    "openai": "https://api.openai.com/v1",
+                    "mistral": "https://api.mistral.ai/v1",
+                }
+                key_envs = {"groq": "GROQ_API_KEY", "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}
+                default_models = {"groq": "llama-3.3-70b-versatile", "openai": "gpt-4o-mini",
+                                  "mistral": "mistral-small-latest"}
+                api_key = os.getenv(key_envs[prov], "")
+                if not api_key:
+                    continue
+                ans = self._call_openai_compatible(prov, base_urls[prov], api_key,
+                                                   default_models[prov], user_text, system_prompt)
+            if ans:
+                return ans
+        return None
+
+    def ask(self, user_text: str) -> str:
+        """Exécute la cascade selon le cerveau préféré et les clés disponibles."""
+        ans = self.ask_with_system(user_text, build_system_prompt())
+        if ans:
+            self.add_history("user", user_text)
+            self.add_history("assistant", ans)
+            return ans
 
         # Fallback gracieux si aucune clé ou indisponible
         has_any_key = any([config.gemini_api_key, config.groq_api_key,
