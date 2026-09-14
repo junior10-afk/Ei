@@ -156,6 +156,10 @@ export class SettingsPanel {
     if (data.mic_device_index !== undefined) {
       this.applyMicSelection(data.mic_device_index);
     }
+    const chatAutoshowInput = document.getElementById('setting-chat-autoshow') as HTMLInputElement;
+    if (chatAutoshowInput && data.chat_autoshow !== undefined) {
+      chatAutoshowInput.checked = data.chat_autoshow !== false;
+    }
   }
 
   public setMicDevices(devices: { index: number; name: string; default?: boolean }[], current: number | null) {
@@ -207,6 +211,10 @@ export class SettingsPanel {
     const micSelect = document.getElementById('setting-mic') as HTMLSelectElement;
     if (micSelect) {
       newSettings.mic_device_index = micSelect.value === '' ? null : parseInt(micSelect.value, 10);
+    }
+    const chatAutoshowInput = document.getElementById('setting-chat-autoshow') as HTMLInputElement;
+    if (chatAutoshowInput) {
+      newSettings.chat_autoshow = chatAutoshowInput.checked;
     }
     const modelChoiceSelect = document.getElementById('setting-model-choice-mode') as HTMLSelectElement;
     if (modelChoiceSelect) newSettings.model_choice_mode = modelChoiceSelect.value;

@@ -24,6 +24,7 @@ class JarvisHUD {
   private timerWidget: TimerWidget;
   private orbsModal: OrbsGalleryModal;
   private modelModal: ModelSelectModal;
+  private chatAutoshow = true;
 
   // Horloge & télémétrie
   private orbTimeEl: HTMLElement;
@@ -449,7 +450,7 @@ class JarvisHUD {
           this.timerWidget.hide();
         } else if (msg.action === 'open_panel' && msg.params) {
           if (msg.params.panel === 'settings') this.settingsPanel.show();
-          else if (msg.params.panel === 'chat') this.chatPanel.show();
+          else if (msg.params.panel === 'chat') { if (this.chatAutoshow) this.chatPanel.show(); }
           else if (msg.params.panel === 'commands') this.commandsPanel.classList.remove('hidden');
           else if (msg.params.panel === 'orbs') this.orbsModal.show();
         } else if (msg.action === 'close_panel' && msg.params) {
@@ -514,7 +515,7 @@ class JarvisHUD {
 
       case 'long_response':
         this.chatPanel.addMessage('assistant', msg.text);
-        this.chatPanel.show();
+        if (this.chatAutoshow) this.chatPanel.show();
         break;
 
       case 'agent_thought':
@@ -553,6 +554,9 @@ class JarvisHUD {
 
       case 'settings':
         this.settingsPanel.populate(msg.data);
+        if (msg.data.chat_autoshow !== undefined) {
+          this.chatAutoshow = msg.data.chat_autoshow !== false;
+        }
         const presetKey = msg.data.orb_preset || msg.data.orb_theme;
         if (presetKey) {
           this.orb.setPreset(presetKey);

@@ -13,6 +13,7 @@
   "orb_theme": "cyber_blue",
   "orb_animation": "plasma",
   "auto_listen": true,
+  "chat_autoshow": true,
   "model_choice_mode": "ask",
   "models": {
     "tiers": {
