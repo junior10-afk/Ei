@@ -73,6 +73,14 @@ export class SettingsPanel {
       });
     }
 
+    // Application immédiate de l'ouverture auto du journal + persistance
+    const chatAutoshowInput = document.getElementById('setting-chat-autoshow') as HTMLInputElement;
+    if (chatAutoshowInput) {
+      chatAutoshowInput.addEventListener('change', () => {
+        this.onSaveCallback({ chat_autoshow: chatAutoshowInput.checked });
+      });
+    }
+
     // Aperçu dynamique en direct lors des changements de sélection
     const presetSelect = document.getElementById('setting-orb-preset') as HTMLSelectElement;
     const themeSelect = document.getElementById('setting-orb-theme') as HTMLSelectElement;
