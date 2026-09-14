@@ -59,6 +59,20 @@ export class SettingsPanel {
       saveBtn.addEventListener('click', () => this.save());
     }
 
+    const refreshMicsBtn = document.getElementById('refresh-mics-btn');
+    if (refreshMicsBtn) {
+      refreshMicsBtn.addEventListener('click', () => this.send({ type: 'list_mics' }));
+    }
+
+    // Bascule immédiate du micro (pas besoin d'attendre "Enregistrer")
+    const micSelect = document.getElementById('setting-mic') as HTMLSelectElement;
+    if (micSelect) {
+      micSelect.addEventListener('change', () => {
+        const v = micSelect.value;
+        this.send({ type: 'set_mic', index: v === '' ? null : parseInt(v, 10) });
+      });
+    }
+
     // Aperçu dynamique en direct lors des changements de sélection
     const presetSelect = document.getElementById('setting-orb-preset') as HTMLSelectElement;
     const themeSelect = document.getElementById('setting-orb-theme') as HTMLSelectElement;
@@ -88,11 +102,17 @@ export class SettingsPanel {
   }
 
   public toggle() {
-    this.element.classList.toggle('hidden');
+    if (this.element.classList.contains('hidden')) {
+      this.show();
+    } else {
+      this.hide();
+    }
   }
 
   public show() {
     this.element.classList.remove('hidden');
+    // Re-détecte les micros à chaque ouverture (casque branché/débranché)
+    this.send({ type: 'list_mics' });
   }
 
   public hide() {
@@ -133,6 +153,34 @@ export class SettingsPanel {
     if (wakeWordsInput && data.wake_words) {
       wakeWordsInput.value = Array.isArray(data.wake_words) ? data.wake_words.join(', ') : data.wake_words;
     }
+    if (data.mic_device_index !== undefined) {
+      this.applyMicSelection(data.mic_device_index);
+    }
+  }
+
+  public setMicDevices(devices: { index: number; name: string; default?: boolean }[], current: number | null) {
+    const micSelect = document.getElementById('setting-mic') as HTMLSelectElement;
+    if (!micSelect) return;
+    micSelect.innerHTML = '';
+    const defOpt = document.createElement('option');
+    defOpt.value = '';
+    defOpt.textContent = 'Défaut système';
+    micSelect.appendChild(defOpt);
+    devices.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = String(d.index);
+      opt.textContent = `${d.name}${d.default ? ' (défaut)' : ''}`;
+      micSelect.appendChild(opt);
+    });
+    this.applyMicSelection(current);
+  }
+
+  private applyMicSelection(current: number | null | undefined) {
+    const micSelect = document.getElementById('setting-mic') as HTMLSelectElement;
+    if (!micSelect) return;
+    const want = current === null || current === undefined ? '' : String(current);
+    const exists = Array.from(micSelect.options).some((o) => o.value === want);
+    micSelect.value = exists ? want : '';
   }
 
   private save() {
@@ -155,6 +203,10 @@ export class SettingsPanel {
     if (qualitySelect) newSettings.orb_quality = qualitySelect.value;
     if (wakeWordsInput) {
       newSettings.wake_words = wakeWordsInput.value.split(',').map((w) => w.trim().toLowerCase()).filter((w) => w.length > 0);
+    }
+    const micSelect = document.getElementById('setting-mic') as HTMLSelectElement;
+    if (micSelect) {
+      newSettings.mic_device_index = micSelect.value === '' ? null : parseInt(micSelect.value, 10);
     }
     const modelChoiceSelect = document.getElementById('setting-model-choice-mode') as HTMLSelectElement;
     if (modelChoiceSelect) newSettings.model_choice_mode = modelChoiceSelect.value;

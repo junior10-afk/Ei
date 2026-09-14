@@ -45,6 +45,13 @@ class ToggleMicMessage(BaseModel):
     type: Literal["toggle_mic"] = "toggle_mic"
     muted: Optional[bool] = None
 
+class ListMicsMessage(BaseModel):
+    type: Literal["list_mics"] = "list_mics"
+
+class SetMicMessage(BaseModel):
+    type: Literal["set_mic"] = "set_mic"
+    index: Optional[Any] = None
+
 class StopAudioMessage(BaseModel):
     type: Literal["stop_audio"] = "stop_audio"
 
@@ -59,5 +66,7 @@ class UpdateSettingsMessage(BaseModel):
 VALIDATORS = {
     "user_input": UserInputMessage,
     "toggle_mic": ToggleMicMessage,
+    "list_mics": ListMicsMessage,
+    "set_mic": SetMicMessage,
     "update_settings": UpdateSettingsMessage,
 }

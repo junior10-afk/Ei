@@ -501,6 +501,17 @@ class JarvisHUD {
         this.settingsPanel.setProviderModels(msg);
         break;
 
+      case 'mic_devices':
+        this.settingsPanel.setMicDevices(msg.devices, msg.current);
+        break;
+
+      case 'mic_result':
+        if (!msg.ok) {
+          this.chatPanel.addMessage('action', `Micro : ${msg.message || 'erreur'}`);
+          this.chatPanel.show();
+        }
+        break;
+
       case 'long_response':
         this.chatPanel.addMessage('assistant', msg.text);
         this.chatPanel.show();

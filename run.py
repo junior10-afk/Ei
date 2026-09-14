@@ -46,6 +46,33 @@ async def handle_get_settings(data: dict, websocket):
         "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
     })
 
+async def handle_list_mics(data: dict, websocket):
+    """Renvoie les micros d'entrée détectés + la sélection courante."""
+    from voice.mic import list_input_devices
+    devices = await asyncio.get_running_loop().run_in_executor(None, list_input_devices)
+    await bus.send_to(websocket, {
+        "type": "mic_devices",
+        "devices": devices,
+        "current": config.get("mic_device_index", None),
+    })
+
+async def handle_set_mic(data: dict, websocket):
+    """Bascule le micro actif (index sounddevice, null = défaut système)."""
+    from voice.mic import mic_listener
+    raw = data.get("index", None)
+    try:
+        index = None if raw is None or str(raw).lower() in ("null", "default", "") else int(raw)
+    except (ValueError, TypeError):
+        await bus.send_to(websocket, {"type": "mic_result", "ok": False,
+                                       "message": "Index invalide."})
+        return
+    config.update({"mic_device_index": index})
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, mic_listener.restart)
+    name = "défaut système" if index is None else f"périphérique {index}"
+    print(f"[Run] Micro basculé sur : {name}.")
+    await bus.broadcast({"type": "mic_result", "ok": True, "index": index})
+
 async def handle_set_api_key(data: dict, websocket):
     """Enregistre une clé API dans .env (jamais dans config.json) et confirme."""
     var = (data.get("var") or data.get("variable") or "").upper().strip()
@@ -176,6 +203,8 @@ async def handle_get_routines(data: dict, websocket):
 def setup_ws_handlers():
     bus.register_handler("user_input", handle_user_input)
     bus.register_handler("toggle_mic", handle_toggle_mic)
+    bus.register_handler("list_mics", handle_list_mics)
+    bus.register_handler("set_mic", handle_set_mic)
     bus.register_handler("stop_audio", handle_stop_audio)
     bus.register_handler("get_settings", handle_get_settings)
     bus.register_handler("update_settings", handle_update_settings)

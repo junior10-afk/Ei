@@ -138,6 +138,25 @@ export interface RoutineTriggeredMessage {
   time?: string;
 }
 
+export interface MicDeviceInfo {
+  index: number;
+  name: string;
+  default?: boolean;
+}
+
+export interface MicDevicesMessage {
+  type: 'mic_devices';
+  devices: MicDeviceInfo[];
+  current: number | null;
+}
+
+export interface MicResultMessage {
+  type: 'mic_result';
+  ok: boolean;
+  index?: number | null;
+  message?: string;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -159,7 +178,9 @@ export type IncomingMessage =
   | AgentTokenMessage
   | ToolConfirmationRequestMessage
   | TaskStatusMessage
-  | RoutineTriggeredMessage;
+  | RoutineTriggeredMessage
+  | MicDevicesMessage
+  | MicResultMessage;
 
 export interface UserInputMessage {
   type: 'user_input';

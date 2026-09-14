@@ -36,6 +36,16 @@ class MicrophoneListener:
             self._thread.join(timeout=2.0)
         print("[Microphone] Écoute micro arrêtée.")
 
+    def restart(self):
+        """Rouvre le flux sur le périphérique courant de la config (bascule à chaud)."""
+        was_running = self._running
+        self.stop()
+        if was_running:
+            # Laisse le flux se libérer avant réouverture
+            time.sleep(0.3)
+            self.start()
+            print("[Microphone] Flux rouvert (nouveau périphérique).")
+
     def _calculate_rms(self, audio_chunk: np.ndarray) -> float:
         """Calcule l'énergie RMS normalisée (0.0 à 1.0)."""
         if len(audio_chunk) == 0:
@@ -295,3 +305,27 @@ class MicrophoneListener:
             self.on_speech_recognized(text)
 
 mic_listener = MicrophoneListener()
+
+
+def list_input_devices() -> list:
+    """Énumère les périphériques d'entrée audio (pour le sélecteur du HUD).
+    Jamais d'exception : [] si indisponible."""
+    try:
+        import sounddevice as sd
+        devices = sd.query_devices()
+        try:
+            default_in, _ = sd.default.device
+        except Exception:
+            default_in = None
+        result = []
+        for i, d in enumerate(devices):
+            if d.get("max_input_channels", 0) > 0:
+                result.append({
+                    "index": i,
+                    "name": d.get("name", f"Périphérique {i}"),
+                    "default": (i == default_in),
+                })
+        return result
+    except Exception as e:
+        print(f"[Microphone] Énumération impossible ({e}).")
+        return []
