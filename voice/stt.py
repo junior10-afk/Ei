@@ -21,8 +21,8 @@ class SpeechToText:
             if self._whisper_model is None and not self._whisper_failed:
                 try:
                     from faster_whisper import WhisperModel
-                    print("[STT] Chargement du modèle de secours local faster-whisper (tiny)...")
-                    self._whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
+                    print("[STT] Chargement du modèle de secours local faster-whisper (small)...")
+                    self._whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
                     print("[STT] Modèle local faster-whisper prêt.")
                 except Exception as e:
                     print(f"[STT] Modèle local faster-whisper non disponible: {e}")
@@ -51,9 +51,12 @@ class SpeechToText:
             print(f"[STT] Erreur transcription locale faster-whisper: {e}")
             return None
 
-    def transcribe_audio_bytes(self, audio_data: bytes, sample_rate: int = 16000) -> Optional[str]:
+    def transcribe_audio_bytes(self, audio_data: bytes, sample_rate: int = 16000,
+                               online_only: bool = False) -> Optional[str]:
         """
         Transcrit un flux PCM int16 mono vers du texte avec Google STT (gratuit).
+        Phase 3 : online_only=True pour les transcripts partiels (pas de chargement
+        du fallback local, échec silencieux -> None).
         """
         try:
             audio = sr.AudioData(audio_data, sample_rate, 2)
@@ -62,10 +65,21 @@ class SpeechToText:
         except sr.UnknownValueError:
             return None
         except (sr.RequestError, Exception) as e:
+            if online_only:
+                return None
             # Erreur de connexion ou réseau indisponible -> fallback local
             print(f"[STT] Service Cloud indisponible ({e}). Bascule vers faster-whisper local...")
             np_arr = np.frombuffer(audio_data, dtype=np.int16)
             return self._transcribe_local_whisper(np_arr)
+
+    def transcribe_partial_numpy(self, np_audio: np.ndarray, sample_rate: int = 16000) -> Optional[str]:
+        """Phase 3 : transcript provisoire best-effort (cloud seul). Jamais d'exception."""
+        try:
+            if np_audio.dtype != np.int16:
+                np_audio = (np_audio * 32767).astype(np.int16)
+            return self.transcribe_audio_bytes(np_audio.tobytes(), sample_rate, online_only=True)
+        except Exception:
+            return None
 
     def transcribe_numpy(self, np_audio: np.ndarray, sample_rate: int = 16000) -> Optional[str]:
         """Convertit un tableau numpy int16 et transcrit avec double étage Cloud / Local."""

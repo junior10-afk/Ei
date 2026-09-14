@@ -360,10 +360,12 @@ class DatabaseManager:
         self._export_to_legacy_json()
         return found_key
 
-    def compact_session(self, session_id: str, keep_last: int = 10) -> bool:
+    def compact_session(self, session_id: str, keep_last: int = 10, summary: Optional[str] = None) -> bool:
         """
         Compresse les anciens messages au-delà de keep_last pour préserver le fil conducteur
         sans saturer le budget tokens.
+        Si `summary` est fourni (résumé LLM de la Phase 2), il est persisté tel quel ;
+        sinon, repli synchrone par troncation (comportement d'origine).
         """
         with self._db_lock, self._get_connection() as conn:
             cursor = conn.cursor()
@@ -381,7 +383,7 @@ class DatabaseManager:
             for r in old_rows:
                 role_label = "Utilisateur" if r["role"] == "user" else "Ei"
                 summary_lines.append(f"{role_label}: {r['content'][:120]}")
-            compacted_summary = "Résumé des échanges précédents :\n" + "\n".join(summary_lines[:8])
+            compacted_summary = summary or ("Résumé des échanges précédents :\n" + "\n".join(summary_lines[:8]))
 
             old_ids = [r["id"] for r in old_rows]
             placeholders = ",".join("?" * len(old_ids))

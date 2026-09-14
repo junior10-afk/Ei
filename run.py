@@ -207,6 +207,19 @@ def main():
     # 1. Démarrer le serveur Web statique pour le frontend HUD
     serve_static(port=vite_port)
 
+    # 1.b Préchauffage Phase 1 §1.4 (background, non-bloquant) : construit le
+    # client Gemini persistant pour que le premier tour ne paie pas l'init.
+    def _warmup_models():
+        try:
+            from brain.llm import llm_cascade
+            key = (config.gemini_api_key or os.getenv("GEMINI_API_KEY", "")).strip().strip('"\'')
+            if key:
+                llm_cascade._gemini_client_cached(key)
+                print("[Run] Client Gemini préchauffé.")
+        except Exception as e:
+            print(f"[Run] Préchauffage modèle ignoré: {e}")
+    threading.Thread(target=_warmup_models, daemon=True).start()
+
     # 2. Démarrer la boucle asyncio pour le WebSocket dans un thread séparé
     ws_host = config.host
     ws_port = config.ws_port

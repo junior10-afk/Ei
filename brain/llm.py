@@ -8,6 +8,17 @@ from brain.prompt import build_system_prompt
 class LLMCascade:
     def __init__(self):
         self.cooldowns: Dict[str, float] = {}
+        self._gemini_client = None
+        self._gemini_client_key = None
+
+    def _gemini_client_cached(self, api_key: str):
+        """Phase 1 §1.4 : réutilise le client au lieu de le reconstruire à chaque
+        appel (évite handshake répété ; pas d'affinité serveur, API stateless)."""
+        if self._gemini_client is None or self._gemini_client_key != api_key:
+            from google import genai
+            self._gemini_client = genai.Client(api_key=api_key)
+            self._gemini_client_key = api_key
+        return self._gemini_client
 
     def _is_available(self, provider: str) -> bool:
         until = self.cooldowns.get(provider, 0.0)
@@ -46,19 +57,19 @@ class LLMCascade:
             pass
 
     def _call_gemini(self, user_text: str, system_prompt: str, model: str = "gemini-2.5-flash",
-                     max_tokens: int = 1024) -> Optional[str]:
+                     max_tokens: int = 1024, include_history: bool = True) -> Optional[str]:
         api_key = (config.gemini_api_key or os.getenv("GEMINI_API_KEY", "")).strip().strip('"\'')
         if not api_key:
             return None
 
         try:
-            from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=api_key)
+            client = self._gemini_client_cached(api_key)
             contents = []
-            for item in self.history[-4:]:
-                contents.append(f"{item['role'].capitalize()}: {item['text']}")
+            if include_history:
+                for item in self.history[-4:]:
+                    contents.append(f"{item['role'].capitalize()}: {item['text']}")
             contents.append(f"User: {user_text}")
             full_user_msg = "\n".join(contents)
 
@@ -110,7 +121,7 @@ class LLMCascade:
         return None
 
     def _call_openai_compatible(self, provider: str, base_url: str, api_key: str, model: str, user_text: str, system_prompt: str,
-                                max_tokens: int = 1024) -> Optional[str]:
+                                max_tokens: int = 1024, include_history: bool = True) -> Optional[str]:
         api_key = (api_key or "").strip().strip('"\'')
         if not api_key:
             return None
@@ -121,9 +132,10 @@ class LLMCascade:
                 "Content-Type": "application/json"
             }
             messages = [{"role": "system", "content": system_prompt}]
-            for item in self.history[-4:]:
-                role = "assistant" if item["role"] == "assistant" else "user"
-                messages.append({"role": role, "content": item["text"]})
+            if include_history:
+                for item in self.history[-4:]:
+                    role = "assistant" if item["role"] == "assistant" else "user"
+                    messages.append({"role": role, "content": item["text"]})
             messages.append({"role": "user", "content": user_text})
 
             payload = {
@@ -152,7 +164,8 @@ class LLMCascade:
         except Exception:
             return None
 
-    def ask_with_model(self, user_text: str, model: Optional[Dict], system_prompt: str) -> Optional[str]:
+    def ask_with_model(self, user_text: str, model: Optional[Dict], system_prompt: str,
+                       include_history: bool = True) -> Optional[str]:
         """Exécute une requête sur un modèle précis du catalogue (dict: provider/model/key_env).
 
         Retourne None si le modèle est indisponible (clé manquante, erreur API) :
@@ -167,15 +180,17 @@ class LLMCascade:
         api_key = (os.getenv(key_env, "") if key_env else "").strip().strip('"\'')
 
         if provider == "gemini":
-            ans = self._call_gemini(user_text, system_prompt, model=model_name, max_tokens=max_tokens)
+            ans = self._call_gemini(user_text, system_prompt, model=model_name, max_tokens=max_tokens,
+                                    include_history=include_history)
             # Si un modèle spécifique (ex: preview sans quota ou expérimental) échoue, repli immédiat sur gemini-2.5-flash
             if not ans and model_name != "gemini-2.5-flash":
                 print(f"[LLM] Repli automatique de {model_name} vers gemini-2.5-flash...")
-                ans = self._call_gemini(user_text, system_prompt, model="gemini-2.5-flash", max_tokens=max_tokens)
+                ans = self._call_gemini(user_text, system_prompt, model="gemini-2.5-flash", max_tokens=max_tokens,
+                                        include_history=include_history)
         elif provider == "ollama":
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
             ans = self._call_openai_compatible("ollama", base_url, "ollama", model_name or "llama3.2",
-                                               user_text, system_prompt)
+                                               user_text, system_prompt, include_history=include_history)
         else:
             base_urls = {
                 "groq": "https://api.groq.com/openai/v1",
@@ -187,7 +202,8 @@ class LLMCascade:
                 print(f"[LLM] Modèle {model.get('id')} indisponible (clé {key_env or 'N/A'} manquante).")
                 return None
             ans = self._call_openai_compatible(provider, base_url, api_key, model_name,
-                                               user_text, system_prompt, max_tokens=max_tokens)
+                                               user_text, system_prompt, max_tokens=max_tokens,
+                                               include_history=include_history)
         return ans
 
     def ask_with_system(self, user_text: str, system_prompt: str) -> Optional[str]:

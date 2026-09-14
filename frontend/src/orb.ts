@@ -587,6 +587,8 @@ export class JarvisOrb {
         break;
 
       case 'listening':
+      case 'provisional':
+      case 'barge_in':
         this.targetRadius = 13.5;
         this.targetSpeed = 0.35;
         this.targetLineAmount = this.currentPreset.hasLines ? 0.45 : 0.0;

@@ -36,8 +36,10 @@ class AgentEngine:
         return self._cancel_event.is_set()
 
     def _stream_output(self, text: str, iteration: int = 1):
-        """Diffuse le texte segment par segment vers le HUD pour un affichage en direct."""
+        """Diffuse le texte segment par segment vers le HUD pour un affichage en direct,
+        et pousse chaque phrase terminée vers le TTS non-bloquant (Phase 1 §1.2)."""
         words = text.split(" ")
+        buf = ""
         for i, word in enumerate(words):
             if self.is_cancelled():
                 break
@@ -46,7 +48,22 @@ class AgentEngine:
                 "token": word + (" " if i < len(words) - 1 else ""),
                 "iteration": iteration
             })
+            cb = getattr(self, "_sentence_cb", None)
+            if cb is not None:
+                buf = (buf + " " + word).strip()
+                if re.search(r"[.?!;\n]$", word) and len(buf) > 10:
+                    try:
+                        cb(buf)
+                    except Exception:
+                        pass
+                    buf = ""
             time.sleep(0.012)
+        cb = getattr(self, "_sentence_cb", None)
+        if cb is not None and buf.strip():
+            try:
+                cb(buf.strip())
+            except Exception:
+                pass
 
     COMPLEX_KEYWORDS = [
         "voyage", "itinéraire", "programme", "organise", "planifie", "compare",
@@ -84,8 +101,10 @@ class AgentEngine:
             print(f"[AgentEngine] Erreur génération de plan: {e}")
         return []
 
-    def run(self, user_query: str, model_override: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+    def run(self, user_query: str, model_override: Optional[Dict[str, Any]] = None,
+            on_sentence=None) -> Tuple[str, str]:
         self._cancel_event.clear()
+        self._sentence_cb = on_sentence  # Phase 1 §1.2 : streaming phrase -> TTS
         user_text = user_query.strip()
         user_name = config.get("user_name", "Monsieur")
         assistant_name = config.get("assistant_name", "Ei")

@@ -1,4 +1,4 @@
-export type AssistantStateType = 'idle' | 'listening' | 'thinking' | 'speaking';
+export type AssistantStateType = 'idle' | 'listening' | 'provisional' | 'thinking' | 'speaking' | 'barge_in';
 
 export interface SetStateMessage {
   type: 'set_state';

@@ -4,8 +4,10 @@ from typing import Callable, List, Optional
 class AssistantState:
     IDLE = "idle"
     LISTENING = "listening"
+    PROVISIONAL = "provisional"  # Phase 3 : début de parole entendu, phrase non finalisée
     THINKING = "thinking"
     SPEAKING = "speaking"
+    BARGE_IN = "barge_in"  # Phase 3 : l'utilisateur coupe la parole à Ei
 
 class StateManager:
     def __init__(self):

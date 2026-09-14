@@ -598,8 +598,10 @@ class JarvisHUD {
     const labels: Record<AssistantStateType, string> = {
       idle: 'en veille',
       listening: 'écoute active...',
+      provisional: 'début de parole...',
       thinking: 'réflexion...',
-      speaking: 'synthèse vocale'
+      speaking: 'synthèse vocale',
+      barge_in: 'interruption !'
     };
     this.statusTextEl.innerText = labels[state] || state.toLowerCase();
   }

@@ -18,7 +18,7 @@ from tools.registry import tool_registry
 
 class Dispatcher:
     def __init__(self):
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ei_dispatcher")
+        self._executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ei_dispatcher")
         self._cancel_event = threading.Event()
         self._current_future: Optional[Future] = None
 
@@ -131,8 +131,11 @@ class Dispatcher:
         if self._cancel_event.is_set():
             return
 
-        # 5. Routage de modèle et exécution par le moteur d'agent autonome (ReAct)
+        # 5. Routage de modèle puis exécution découplée (Phase 1 §1.2+1.3) :
+        # filler rapide (tiers.light) en parallèle du worker lourd (tiers.heavy).
+        # Le fast path ne bloque jamais sur le slow path.
         from core.models import route_model_for_task
+        import concurrent.futures as _cf
         route = route_model_for_task(query)
         model = route.get("model")
         if model:
@@ -146,11 +149,49 @@ class Dispatcher:
         if self._cancel_event.is_set():
             return
 
-        # Exécution de la boucle cognitive ReAct
-        speech_summary, detailed_output = agent_engine.run(query, model_override=model)
+        streamed = {"n": 0, "sentences": [], "filler_spoken": False}
+
+        def _on_sentence(sentence: str):
+            if self._cancel_event.is_set():
+                return
+            streamed["n"] += 1
+            streamed["sentences"].append(sentence)
+            tts_engine.feed_sentence(sentence, priority=0)
+
+        heavy_ex = _cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix="ei_heavy")
+        try:
+            fut_heavy = heavy_ex.submit(agent_engine.run, query, model, _on_sentence)
+            fut_filler = heavy_ex.submit(self._quick_ack, query)
+            # Période de grâce : si le lourd répond en < 2 s, pas de filler
+            done, _ = _cf.wait([fut_heavy], timeout=2.0)
+            if fut_heavy not in done and not self._cancel_event.is_set():
+                try:
+                    ack = fut_filler.result(timeout=8.0)
+                except Exception:
+                    ack = None
+                if ack and not fut_heavy.done() and not self._cancel_event.is_set():
+                    bus.broadcast_threadsafe({"type": "speech_provisional", "text": ack})
+                    tts_engine.speak(ack, priority=1)
+                    streamed["filler_spoken"] = True
+            speech_summary, detailed_output = fut_heavy.result()
+        finally:
+            heavy_ex.shutdown(wait=False, cancel_futures=True)
 
         if self._cancel_event.is_set():
             return
+
+        # Le résultat lourd préempte le filler éventuellement en cours.
+        # Attention : stop() vide aussi la file -> ré-enfiler les phrases déjà
+        # streamées pour ne pas perdre la réponse.
+        if streamed["n"] > 0:
+            if streamed["filler_spoken"]:
+                tts_engine.stop()
+                for s in streamed["sentences"]:
+                    tts_engine.feed_sentence(s, priority=0)
+            # else: la réponse est déjà en cours de lecture, ne rien couper
+        elif streamed["filler_spoken"]:
+            tts_engine.stop()  # coupe le filler
+        bus.broadcast_threadsafe({"type": "speech_final", "text": speech_summary})
 
         # Diffusion du plan complet et des résultats détaillés au chat / console du HUD
         bus.broadcast_threadsafe({
@@ -159,7 +200,37 @@ class Dispatcher:
             "model": (model or {}).get("label", "")
         })
 
-        # Synthèse vocale concise
-        tts_engine.speak(speech_summary)
+        # Si le streaming a déjà fait entendre la réponse phrase par phrase,
+        # ne pas la répéter. Sinon, synthèse vocale concise (ancien comportement).
+        if streamed["n"] == 0 and speech_summary:
+            tts_engine.speak(speech_summary, priority=0)
+
+    def _quick_ack(self, query: str) -> Optional[str]:
+        """Accusé de réception ultra-court via le tiers léger (jamais bloquant :
+        None à la moindre erreur)."""
+        try:
+            tiers = (config.get("models", {}) or {}).get("tiers", {}) or {}
+            light_ref = str(tiers.get("light", "") or "")
+            if "/" in light_ref:
+                prov, mod = light_ref.split("/", 1)
+            else:
+                prov, mod = "gemini", light_ref or "gemini-2.5-flash"
+            key_env = {"gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY",
+                       "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}.get(prov.lower(), "")
+            model_info = {"provider": prov.lower(), "model": mod, "key_env": key_env,
+                          "max_tokens": 64}
+            ack = llm_cascade.ask_with_model(
+                f"Demande de l'utilisateur : {query}",
+                model_info,
+                "Tu es Ei. Accuse réception de la demande en UNE seule phrase très "
+                "courte (15 mots max), naturelle, en français, sans markdown. "
+                "Ne réponds PAS à la demande, dis seulement que tu t'en occupes.",
+                include_history=False,  # accusé autonome : latence minimale
+            )
+            if ack:
+                ack = ack.strip().split("\n")[0][:200]
+            return ack or None
+        except Exception:
+            return None
 
 dispatcher = Dispatcher()

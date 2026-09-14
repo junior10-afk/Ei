@@ -13,3 +13,7 @@ pywebview>=5.0.0
 google-genai>=1.0.0
 openai>=1.0.0
 pycaw>=20240210
+torch>=2.0.0
+transformers>=4.48
+qwen-tts>=0.1.0
+librosa>=0.11.0
