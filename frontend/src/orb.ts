@@ -389,6 +389,75 @@ export class JarvisOrb {
         this.pos[i3 + 1] = sy * scale * wFactor + (Math.random() - 0.5) * 1.5;
         this.pos[i3 + 2] = sz * scale * wFactor + (Math.random() - 0.5) * 1.5;
         this.vel[i3] = 0; this.vel[i3 + 1] = 0; this.vel[i3 + 2] = 0;
+      } else if (preset.id === 'pulsar') {
+        // Neutron Pulsar: Cœur ultra-dense sphérique + deux faisceaux polaires relativistes collimatés
+        if (i < this.N * 0.50) {
+          // Étoile à neutrons centrale super-compacte
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const pr = Math.pow(Math.random(), 0.75) * 5.8;
+          this.pos[i3] = pr * Math.sin(phi) * Math.cos(theta);
+          this.pos[i3 + 1] = pr * Math.sin(phi) * Math.sin(theta);
+          this.pos[i3 + 2] = pr * Math.cos(phi);
+          this.vel[i3] = (Math.random() - 0.5) * 0.04;
+          this.vel[i3 + 1] = (Math.random() - 0.5) * 0.04;
+          this.vel[i3 + 2] = (Math.random() - 0.5) * 0.04;
+        } else {
+          // Faisceaux polaires collimatés le long de +Y et -Y
+          const sign = i % 2 === 0 ? 1 : -1;
+          const h = sign * (5.5 + Math.random() * (r * 1.45));
+          const coneR = (Math.abs(h) / (r * 1.45)) * 2.8 + Math.random() * 0.6;
+          const angle = Math.random() * Math.PI * 2;
+          this.pos[i3] = Math.cos(angle) * coneR;
+          this.pos[i3 + 1] = h;
+          this.pos[i3 + 2] = Math.sin(angle) * coneR;
+          this.vel[i3] = 0;
+          this.vel[i3 + 1] = sign * 0.25;
+          this.vel[i3 + 2] = 0;
+        }
+      } else if (preset.id === 'abyssal') {
+        // Abyssal Biolum: Manteau biomimétique organique en cloche avec lobes et filaments
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const lobe = 0.85 + 0.15 * Math.sin(theta * 4.0) * Math.cos(phi * 2.0);
+        const rad = Math.pow(Math.random(), 0.6) * r * lobe;
+        this.pos[i3] = rad * Math.sin(phi) * Math.cos(theta);
+        this.pos[i3 + 1] = rad * Math.sin(phi) * Math.sin(theta) * 1.1;
+        this.pos[i3 + 2] = rad * Math.cos(phi);
+        this.vel[i3] = (Math.random() - 0.5) * 0.015;
+        this.vel[i3 + 1] = (Math.random() - 0.5) * 0.015;
+        this.vel[i3 + 2] = (Math.random() - 0.5) * 0.015;
+      } else if (preset.id === 'iron_man') {
+        // Mark VII Stark: Géométrie d'armure polygonale & anneaux de stabilisation titane
+        if (i < this.N * 0.18) {
+          // Noyau Unibeam central
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const ur = Math.pow(Math.random(), 0.8) * 4.4;
+          this.pos[i3] = ur * Math.sin(phi) * Math.cos(theta);
+          this.pos[i3 + 1] = ur * Math.sin(phi) * Math.sin(theta);
+          this.pos[i3 + 2] = ur * Math.cos(phi);
+        } else if (i < this.N * 0.55) {
+          // Anneaux stabilisateurs titane doré aux latitudes équatoriales et polaires
+          const ringLevels = [0, 5.2, -5.2, 9.8, -9.8];
+          const levelY = ringLevels[i % ringLevels.length];
+          const ringR = Math.sqrt(Math.max(1.0, r * r - levelY * levelY)) * (0.92 + Math.random() * 0.12);
+          const angle = Math.random() * Math.PI * 2;
+          this.pos[i3] = Math.cos(angle) * ringR;
+          this.pos[i3 + 1] = levelY + (Math.random() - 0.5) * 0.4;
+          this.pos[i3 + 2] = Math.sin(angle) * ringR;
+        } else {
+          // Plaques carmin extérieures facettées
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const shellR = (r * 0.94) + (Math.random() * 1.2);
+          this.pos[i3] = shellR * Math.sin(phi) * Math.cos(theta);
+          this.pos[i3 + 1] = shellR * Math.sin(phi) * Math.sin(theta);
+          this.pos[i3 + 2] = shellR * Math.cos(phi);
+        }
+        this.vel[i3] = (Math.random() - 0.5) * 0.01;
+        this.vel[i3 + 1] = (Math.random() - 0.5) * 0.01;
+        this.vel[i3 + 2] = (Math.random() - 0.5) * 0.01;
       } else {
         // Sphère volumétrique harmonique standard
         const theta = Math.random() * Math.PI * 2;
@@ -420,6 +489,7 @@ export class JarvisOrb {
     const baseColor = new THREE.Color(theme[this.state] || theme.idle);
     const coreColor = new THREE.Color(theme.core);
     const mode = this.currentPreset.colorMode;
+    const t = this.clock ? this.clock.getElapsedTime() : 0;
 
     const cAttr = this.particleGeo.getAttribute('color') as THREE.BufferAttribute;
     if (!cAttr) return;
@@ -500,6 +570,72 @@ export class JarvisOrb {
         r = normY;
         g = normY * 0.2 + (1 - normY) * 0.6;
         b = (1 - normY);
+      } else if (mode === 'pulsar' || this.currentPreset.id === 'pulsar') {
+        // Neutron Pulsar: Cœur ultra-dense bleu-blanc incandescent -> Faisceaux polaires cyan électrique & violet relativiste
+        const absY = Math.abs(y);
+        const polarDist = Math.sqrt(x * x + z * z);
+        if (dist < 6.2) {
+          // Étoile à neutrons centrale super-dense
+          const flare = (this.state === 'speaking' ? this.volume * 0.35 : 0.0);
+          r = Math.min(1.0, 0.92 + flare);
+          g = Math.min(1.0, 0.97 + flare);
+          b = 1.0;
+        } else if (polarDist < 3.8 + absY * 0.18) {
+          // Faisceaux polaires relativistes
+          const beamProgress = Math.min(1.0, Math.max(0.0, (absY - 5.0) / 18.0));
+          const jetPulse = Math.sin(absY * 0.6 - t * 8.0) * 0.15;
+          r = Math.min(1.0, Math.max(0.0, 0.15 + beamProgress * 0.6 + jetPulse));
+          g = Math.min(1.0, Math.max(0.0, 0.85 - beamProgress * 0.55 + jetPulse));
+          b = 1.0;
+          if (this.state === 'speaking') {
+            r = Math.min(1.0, r + this.volume * 0.4);
+            g = Math.min(1.0, g + this.volume * 0.3);
+          }
+        } else {
+          // Magnétosphère externe diffuse
+          r = 0.25; g = 0.55; b = 1.0;
+        }
+      } else if (mode === 'abyssal' || this.currentPreset.id === 'abyssal') {
+        // Abyssal Biolum: Dégradé océanique profond + vagues bioluminescentes turquoise et flashs de phosphorescence
+        const depthNorm = Math.min(1.0, Math.max(0.0, (y + this.currentRadius) / (this.currentRadius * 2)));
+        const bioWave = Math.sin(dist * 0.4 - t * 2.5 + depthNorm * 2.0);
+        const isSparks = ((i * 47) % 21 === 0);
+        if (isSparks) {
+          // Scintillation phosphorescente bioluminescente
+          const sparkFlash = 0.5 + 0.5 * Math.sin(t * 6.0 + i);
+          r = 0.35 + sparkFlash * 0.35;
+          g = 0.95 + sparkFlash * 0.05;
+          b = 0.85 + sparkFlash * 0.15;
+        } else if (bioWave > 0.2) {
+          // Crêtes bioluminescentes turquoise lagon
+          r = 0.10; g = 0.92; b = 0.78;
+        } else {
+          // Abysses marines profondes turquoise-indigo
+          r = 0.02; g = 0.46; b = 0.68;
+        }
+        if (this.state === 'speaking') {
+          g = Math.min(1.0, g + this.volume * 0.25);
+          r = Math.min(1.0, r + this.volume * 0.2);
+        }
+      } else if (mode === 'iron_man' || this.currentPreset.id === 'iron_man') {
+        // Mark VII Stark: Unibeam blanc or étincelant -> Titane doré -> Carmin Stark métallisé
+        if (dist < 4.6) {
+          // Cœur Arc / Unibeam
+          const flare = (this.state === 'speaking' ? this.volume * 0.3 : 0.0);
+          r = 1.0; g = Math.min(1.0, 0.96 + flare); b = Math.min(1.0, 0.90 + flare);
+        } else if (dist < 9.8 || Math.abs(y) < 2.5 || (i % 6 === 0)) {
+          // Bandes et segments d'or titane
+          r = 1.0; g = 0.78; b = 0.05;
+        } else {
+          // Coque carmin Stark
+          if (this.state === 'listening' || this.state === 'speaking') {
+            r = 1.0; g = 0.18 + this.volume * 0.2; b = 0.05;
+          } else if (this.state === 'thinking') {
+            r = 0.95; g = 0.0; b = 0.35;
+          } else {
+            r = 0.86; g = 0.04; b = 0.12;
+          }
+        }
       } else {
         // Mode 'gradient' standard: Lerp radial Cœur -> Surface
         const norm = Math.min(1.0, dist / this.currentRadius);
@@ -829,6 +965,65 @@ export class JarvisOrb {
         this.vel[i3] += (targetX - x) * 0.035;
         this.vel[i3 + 2] += (targetZ - z) * 0.035;
         this.vel[i3 + 1] += (Math.sin(ph + t * 1.5) * (rTarget * 0.5) - y) * 0.025;
+      } else if (this.currentPreset.id === 'pulsar') {
+        // Neutron Pulsar: Cœur hyper-compressé + faisceaux polaires accélérés + ondes magnétosphériques
+        if (i < this.N * 0.50) {
+          // Cœur ultra-dense: compression gravitationnelle avec pulsation
+          const coreR = 5.8 + Math.sin(t * 6.0) * 0.3 + this.volume * 0.6;
+          const corePull = (dist - coreR) * 0.05;
+          this.vel[i3] -= (x / dist) * corePull;
+          this.vel[i3 + 1] -= (y / dist) * corePull;
+          this.vel[i3 + 2] -= (z / dist) * corePull;
+          // Rotation rapide du magnétar
+          const xzDist = Math.sqrt(x * x + z * z) || 0.01;
+          const spinSpeed = 0.06 * effectiveSpeed;
+          this.vel[i3] += (-z / xzDist) * spinSpeed;
+          this.vel[i3 + 2] += (x / xzDist) * spinSpeed;
+          // Pulsation radiale avec le volume
+          const pulse = Math.sin(t * 8.0 + ph) * (0.008 + this.volume * 0.025);
+          this.vel[i3] += (x / dist) * pulse;
+          this.vel[i3 + 1] += (y / dist) * pulse;
+          this.vel[i3 + 2] += (z / dist) * pulse;
+        } else {
+          // Faisceaux polaires relativistes collimatés
+          const sign = y >= 0 ? 1 : -1;
+          // Accélération le long de l'axe polaire
+          this.vel[i3 + 1] += sign * (0.035 + this.volume * 0.08) * effectiveSpeed;
+          // Confinement magnétique du faisceau (converge vers l'axe Y)
+          const polarR = Math.sqrt(x * x + z * z) || 0.01;
+          const confine = polarR * 0.04;
+          this.vel[i3] -= (x / polarR) * confine;
+          this.vel[i3 + 2] -= (z / polarR) * confine;
+          // Précession spiralée
+          const precession = 0.015 * effectiveSpeed;
+          this.vel[i3] += (-z / polarR) * precession;
+          this.vel[i3 + 2] += (x / polarR) * precession;
+          // Recyclage des particules qui dépassent la portée
+          if (Math.abs(y) > rTarget * 1.6) {
+            a[i3 + 1] = sign * 5.5;
+            this.vel[i3 + 1] = sign * 0.15;
+          }
+        }
+      } else if (this.currentPreset.id === 'abyssal') {
+        // Abyssal Biolum: Mouvement pélagique lent et ondulant avec courants océaniques
+        const pull = (dist - rTarget) * 0.028;
+        this.vel[i3] -= (x / dist) * pull;
+        this.vel[i3 + 1] -= (y / dist) * pull;
+        this.vel[i3 + 2] -= (z / dist) * pull;
+        // Courants marins: ondulations lentes multi-fréquences
+        const current1 = Math.sin(t * 0.6 + ph * 0.3 + y * 0.15) * 0.005 * effectiveSpeed;
+        const current2 = Math.cos(t * 0.45 + ph * 0.5 + x * 0.1) * 0.004 * effectiveSpeed;
+        const current3 = Math.sin(t * 0.35 + ph * 0.8 + z * 0.12) * 0.003 * effectiveSpeed;
+        this.vel[i3] += current1;
+        this.vel[i3 + 1] += current2 + Math.sin(t * 1.8 + dist * 0.3) * 0.002;
+        this.vel[i3 + 2] += current3;
+        // Pulsation bioluminescente synchronisée au volume
+        if (isSpeaking) {
+          const bioExpand = Math.sin(t * 3.5 + dist * 0.4) * this.volume * 0.025;
+          this.vel[i3] += (x / dist) * bioExpand;
+          this.vel[i3 + 1] += (y / dist) * bioExpand;
+          this.vel[i3 + 2] += (z / dist) * bioExpand;
+        }
       } else if (style === 'quantum') {
         // Ondes quantiques harmoniques
         const wave = Math.sin(dist * 0.75 - t * 5.5 + ph * 0.4) * (0.012 + this.volume * 0.03) * effectiveSpeed;
@@ -912,6 +1107,56 @@ export class JarvisOrb {
         ca[i3] = Math.cos(angle) * rad;
         ca[i3 + 1] = Math.sin(angle) * rad;
         ca[i3 + 2] = (Math.random() - 0.5) * 0.5;
+      }
+    } else if (coreMode === 'pulsar' || this.currentPreset.id === 'pulsar') {
+      // Pulsar: Noyau de neutrons ultra-dense en rotation rapide avec pulsation magnétique
+      const pulsarR = 3.2 + Math.sin(t * 8.0) * 0.25 + this.volume * 0.6;
+      const spinRate = t * 6.0;
+      for (let i = 0; i < this.coreN; i++) {
+        const i3 = i * 3;
+        const normI = i / this.coreN;
+        const theta = normI * Math.PI * 2 * 3.0 + spinRate;
+        const phi = Math.acos(2 * normI - 1);
+        const r0 = Math.pow(normI, 0.5) * pulsarR;
+        ca[i3] = r0 * Math.sin(phi) * Math.cos(theta);
+        ca[i3 + 1] = r0 * Math.sin(phi) * Math.sin(theta);
+        ca[i3 + 2] = r0 * Math.cos(phi);
+      }
+    } else if (coreMode === 'abyssal' || this.currentPreset.id === 'abyssal') {
+      // Abyssal: Cœur bioluminescent organique en respiration lente
+      const breathe = 1.0 + Math.sin(t * 1.2) * 0.15 + this.volume * 0.35;
+      const wobble = Math.sin(t * 0.8) * 0.1;
+      for (let i = 0; i < this.coreN; i++) {
+        const i3 = i * 3;
+        const normI = i / this.coreN;
+        const baseR = Math.pow(normI, 0.6) * (this.currentRadius * 0.38) * breathe;
+        const ph = i * 1.5;
+        ca[i3] = baseR * Math.sin(ph + t * 0.35 + wobble);
+        ca[i3 + 1] = baseR * Math.cos(ph * 1.1 + t * 0.25) * 1.15;
+        ca[i3 + 2] = baseR * Math.sin(ph * 0.8 - t * 0.2 + wobble * 0.7);
+      }
+    } else if (coreMode === 'iron_man' || this.currentPreset.id === 'iron_man') {
+      // Iron Man: Réacteur Arc miniature avec anneau de bobines et noyau unibeam
+      const arcPulse = 1.0 + Math.sin(t * 4.5) * 0.08 + this.volume * 0.4;
+      const ringR = 3.5 * arcPulse;
+      const ringN = Math.floor(this.coreN * 0.7);
+      for (let i = 0; i < ringN; i++) {
+        const i3 = i * 3;
+        const angle = (i / ringN) * Math.PI * 2 + t * 2.5;
+        const wobbleR = ringR + Math.sin(angle * 10 + t * 6.0) * 0.2;
+        ca[i3] = Math.cos(angle) * wobbleR;
+        ca[i3 + 1] = Math.sin(angle) * wobbleR;
+        ca[i3 + 2] = Math.sin(angle * 3 + t * 2.0) * 0.4;
+      }
+      // Noyau central unibeam
+      for (let i = ringN; i < this.coreN; i++) {
+        const i3 = i * 3;
+        const normI = (i - ringN) / (this.coreN - ringN);
+        const coreR = Math.pow(normI, 0.7) * 1.8 * arcPulse;
+        const ph = i * 2.3;
+        ca[i3] = coreR * Math.sin(ph + t * 1.5);
+        ca[i3 + 1] = coreR * Math.cos(ph * 1.3 + t * 1.2);
+        ca[i3 + 2] = coreR * Math.sin(ph * 0.6 - t * 0.8);
       }
     } else {
       // Cœur d'énergie sphérique pulsant

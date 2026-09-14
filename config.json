@@ -12,8 +12,8 @@
   "silence_duration_sec": 1.2,
   "max_phrase_sec": 15.0,
   "sound_feedback": true,
-  "orb_theme": "cyber_blue",
-  "orb_animation": "plasma",
+  "orb_theme": "tachikoma",
+  "orb_animation": "equalizer",
   "auto_listen": true,
   "model_choice_mode": "ask",
   "models": {
@@ -24,7 +24,8 @@
     }
   },
   "orb_quality": "high",
-  "orb_preset": "cyber_blue",
+  "orb_preset": "tachikoma",
+  "chat_autoshow": true,
   "agent": {
     "fallback_rules": [
       {

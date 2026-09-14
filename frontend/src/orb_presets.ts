@@ -41,7 +41,9 @@ export type VertexColorMode =
   | 'synthwave'
   | 'pulsar'
   | 'aurora'
-  | 'crystal';
+  | 'crystal'
+  | 'iron_man'
+  | 'abyssal';
 
 export interface OrbPreset {
   id: string;
@@ -89,22 +91,22 @@ export const ORB_PRESETS: Record<string, OrbPreset> = {
     name: 'Mark VII (Stark)',
     category: 'Classique',
     icon: '🔴',
-    description: "Nuance or et carmin inspirée de l'armure de Tony Stark.",
+    description: "Nuance or titane et carmin inspirée de l'armure de Tony Stark avec réacteur arc unibeam.",
     palette: {
       idle: 0xffa000,
       listening: 0xff3d00,
       thinking: 0xff0055,
       speaking: 0xffd700,
-      core: 0xffe082,
-      line: 0xff5500,
+      core: 0xfff8e7,
+      line: 0xff8c00,
       electron: 0xffffff
     },
     animation: 'plasma',
-    colorMode: 'solar',
+    colorMode: 'iron_man',
     hasLines: true,
-    lineOpacity: 0.25,
-    glowColor: 'rgba(255, 160, 0, 0.4)',
-    particleSize: 1.0
+    lineOpacity: 0.32,
+    glowColor: 'rgba(255, 60, 0, 0.45)',
+    particleSize: 1.05
   },
 
   // ── 2. SCI-FI & INTELLIGENCES ARTIFICIELLES ─────────────────────────────────
@@ -217,9 +219,9 @@ export const ORB_PRESETS: Record<string, OrbPreset> = {
     animation: 'quantum',
     colorMode: 'pulsar',
     hasLines: false,
-    glowColor: 'rgba(128, 216, 255, 0.5)',
+    glowColor: 'rgba(128, 216, 255, 0.6)',
     particleSize: 0.95,
-    speedMultiplier: 1.7
+    speedMultiplier: 1.85
   },
   saturn_rings: {
     id: 'saturn_rings',
@@ -350,11 +352,11 @@ export const ORB_PRESETS: Record<string, OrbPreset> = {
       electron: 0xffffff
     },
     animation: 'plasma',
-    colorMode: 'gradient',
+    colorMode: 'abyssal',
     hasLines: false,
-    glowColor: 'rgba(29, 233, 182, 0.45)',
+    glowColor: 'rgba(29, 233, 182, 0.5)',
     particleSize: 0.95,
-    speedMultiplier: 0.8
+    speedMultiplier: 0.85
   },
   // ── 5. CYBER, GÉOMÉTRIE & EXPÉRIMENTAL ──────────────────────────────────────
   dna_helix: {
