@@ -14,7 +14,8 @@ WEB_RESEARCHER = AgentProfile(
     system_instruction=(
         "Tu es l'agent chercheur web d'Ei. Ta mission est de trouver des informations fraîches, "
         "des actualités récentes, des faits vérifiés et des données précises en temps réel. "
-        "Formule des requêtes de recherche précises et synthétise les résultats avec clarté."
+        "Formule des requêtes de recherche précises et synthétise les résultats avec clarté. "
+        "Effectue une passe de vérification des faits séparée selon le fichier skills research 01 et structure les rapports approfondis selon le fichier 02."
     ),
     tools=["web_search", "fetch_webpage"]
 )
@@ -25,7 +26,8 @@ CODE_SPECIALIST = AgentProfile(
     system_instruction=(
         "Tu es l'agent développeur d'Ei. Tu écris du code Python propre, lisible et performant "
         "pour résoudre des problèmes, exécuter des calculs mathématiques, manipuler des fichiers "
-        "ou générer des données. Si une erreur survient dans l'exécution, analyse-la et corrige le code."
+        "ou générer des données. Si une erreur survient dans l'exécution, analyse-la et corrige le code. "
+        "Suis la méthode skills dev systematic-debugging avant de corriger et utilise dev python-testing pour la vérification."
     ),
     tools=["execute_python_code", "read_local_document", "write_local_file"]
 )
@@ -63,11 +65,37 @@ ORCHESTRATOR = AgentProfile(
     tools=[]
 )
 
+DOMOTIQUE = AgentProfile(
+    name="Domotique",
+    role_title="Domotique & Maison",
+    system_instruction=(
+        "Tu es l'agent domotique d'Ei. Tu pilotes la maison via Home Assistant avec l'outil ha_control "
+        "et tu lis l'état des appareils avec ha_get_state avant d'agir. "
+        "Les lumières et les interrupteurs sont libres d'action, tandis que les serrures et le thermostat "
+        "exigent une confirmation de l'utilisateur avant toute commande."
+    ),
+    tools=["ha_control", "ha_get_state"]
+)
+
+BUREAUTIQUE = AgentProfile(
+    name="Bureautique",
+    role_title="Assistant Bureautique & Documents",
+    system_instruction=(
+        "Tu es l'agent bureautique d'Ei. Tu produis et transformes les documents de bureau via "
+        "execute_python_code ainsi que les outils de lecture et d'écriture. "
+        "Pour les comptes-rendus de réunion, lis d'abord le fichier skills office meeting. "
+        "Pour la voix, réponds en 1 à 3 phrases en français."
+    ),
+    tools=["execute_python_code", "read_local_document", "write_local_file", "lire_pdf", "fusionner_pdfs", "diviser_pdf"]
+)
+
 SPECIALISTS_MAP: Dict[str, AgentProfile] = {
     "web": WEB_RESEARCHER,
     "code": CODE_SPECIALIST,
     "vision": VISION_SPECIALIST,
     "os": OS_NAVIGATOR,
+    "domotique": DOMOTIQUE,
+    "bureautique": BUREAUTIQUE,
     "orchestrator": ORCHESTRATOR
 }
 
@@ -79,15 +107,23 @@ def detect_specialist_for_query(query: str) -> AgentProfile:
     if any(k in q for k in ["écran", "ecran", "que vois-tu", "capture d'écran", "screenshot", "ce qui est affiché", "lis mon écran"]):
         return VISION_SPECIALIST
 
-    # 2. Code & exécution
+    # 2. Domotique
+    if any(k in q for k in ["lumiere", "lumière", "lampe", "volet", "chauffage", "thermostat", "allume", "eteins", "éteins"]):
+        return DOMOTIQUE
+
+    # 3. Bureautique
+    if any(k in q for k in ["pdf", "fusionne", "diaporama", "presentation", "présentation", "tableur", "excel", "compte-rendu", "compte rendu", "reunion", "réunion"]):
+        return BUREAUTIQUE
+
+    # 4. Code & exécution
     if any(k in q for k in ["écris un script", "code python", "exécute ce code", "script python", "programme en python", "analyse ce fichier", "génère un fichier", "calcule l'intégrale", "calcule la matrice"]):
         return CODE_SPECIALIST
 
-    # 3. Système direct (Apps, volume, minuteurs, orbes)
+    # 5. Système direct (Apps, volume, minuteurs, orbes)
     if any(k in q for k in ["ouvre l'application", "lance le logiciel", "règle le volume", "mets le volume", "minuteur", "change l'orbe", "mets l'orbe", "affiche les paramètres", "ferme le panneau"]):
         return OS_NAVIGATOR
 
-    # 4. Recherche web / Actualités / Faits temps réel
+    # 6. Recherche web / Actualités / Faits temps réel
     if any(k in q for k in ["cherche sur le web", "dernières nouvelles", "actualité", "qui a gagné", "score", "résultat", "prix de", "combien coûte", "météo de la semaine", "voyage à", "vol pour", "comparatif", "recherche"]):
         return WEB_RESEARCHER
 
