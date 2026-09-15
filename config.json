@@ -13,7 +13,7 @@
   "max_phrase_sec": 15.0,
   "sound_feedback": true,
   "orb_theme": "tesla_coil",
-  "orb_animation": "tesla",
+  "orb_animation": "quantum",
   "auto_listen": true,
   "model_choice_mode": "ask",
   "models": {
@@ -26,6 +26,7 @@
   "orb_quality": "high",
   "orb_preset": "tesla_coil",
   "chat_autoshow": false,
+  "tools_default_permission": "allow",
   "agent": {
     "fallback_rules": [
       {
@@ -48,5 +49,6 @@
         }
       }
     ]
-  }
+  },
+  "tool_permissions": {}
 }
