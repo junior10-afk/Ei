@@ -17,3 +17,4 @@ torch>=2.0.0
 transformers>=4.48
 qwen-tts>=0.1.0
 librosa>=0.11.0
+pypdf>=6.0.0
