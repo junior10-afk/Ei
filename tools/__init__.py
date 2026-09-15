@@ -12,6 +12,9 @@ import tools.code_runner
 import tools.vision
 import tools.documents
 import tools.system_cmds
+import tools.mcp_client
+import tools.calculator
+import tools.reminders
 
 __all__ = [
     "apps",
@@ -26,5 +29,8 @@ __all__ = [
     "code_runner",
     "vision",
     "documents",
-    "system_cmds"
+    "system_cmds",
+    "mcp_client",
+    "calculator",
+    "reminders"
 ]
