@@ -45,6 +45,21 @@ class ToggleMicMessage(BaseModel):
     type: Literal["toggle_mic"] = "toggle_mic"
     muted: Optional[bool] = None
 
+class ListMicsMessage(BaseModel):
+    type: Literal["list_mics"] = "list_mics"
+
+class SetMicMessage(BaseModel):
+    type: Literal["set_mic"] = "set_mic"
+    index: Optional[Any] = None
+
+class ListToolsMessage(BaseModel):
+    type: Literal["list_tools"] = "list_tools"
+
+class SetToolPermissionMessage(BaseModel):
+    type: Literal["set_tool_permission"] = "set_tool_permission"
+    tool: str
+    permission: str
+
 class StopAudioMessage(BaseModel):
     type: Literal["stop_audio"] = "stop_audio"
 
@@ -54,3 +69,14 @@ class GetSettingsMessage(BaseModel):
 class UpdateSettingsMessage(BaseModel):
     type: Literal["update_settings"] = "update_settings"
     data: Dict[str, Any]
+
+# Types avec validation activée côté bus (messages HUD -> Runtime typés)
+VALIDATORS = {
+    "user_input": UserInputMessage,
+    "toggle_mic": ToggleMicMessage,
+    "list_mics": ListMicsMessage,
+    "set_mic": SetMicMessage,
+    "list_tools": ListToolsMessage,
+    "set_tool_permission": SetToolPermissionMessage,
+    "update_settings": UpdateSettingsMessage,
+}

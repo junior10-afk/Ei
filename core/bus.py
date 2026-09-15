@@ -1,8 +1,15 @@
+import os
+import secrets
+import urllib.parse
 import asyncio
 import json
 from typing import Set, Dict, Any, Optional, Callable, Coroutine
 import websockets
-from websockets.server import WebSocketServerProtocol
+try:
+    from websockets.asyncio.server import ServerConnection as WebSocketServerProtocol
+except ImportError:
+    from websockets.server import WebSocketServerProtocol
+
 from core.state import state_manager
 from core.config import config
 
@@ -11,6 +18,8 @@ class MessageBus:
         self.clients: Set[WebSocketServerProtocol] = set()
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self._handlers: Dict[str, Callable[[dict, WebSocketServerProtocol], Coroutine[Any, Any, None]]] = {}
+        # Jeton d'authentification pour sécuriser l'accès localhost
+        self.auth_token: str = os.getenv("EI_AUTH_TOKEN", "").strip() or secrets.token_hex(16)
 
         # S'abonner aux notifications d'état
         state_manager.subscribe(self._on_state_event)
@@ -39,9 +48,14 @@ class MessageBus:
             self.clients.difference_update(disconnected)
 
     def broadcast_threadsafe(self, message: dict):
-        """Diffuse depuis un thread synchrone de manière thread-safe."""
+        """Diffuse depuis un thread synchrone de manière thread-safe avec journalisation des rejets."""
         if self.loop and self.loop.is_running():
-            asyncio.run_coroutine_threadsafe(self.broadcast(message), self.loop)
+            try:
+                asyncio.run_coroutine_threadsafe(self.broadcast(message), self.loop)
+            except Exception as e:
+                print(f"[Bus] Abandon message ({message.get('type')}): erreur threadsafe: {e}")
+        else:
+            print(f"[Bus] Abandon message ({message.get('type')}): boucle asyncio inactive ou fermée.")
 
     async def send_to(self, client: WebSocketServerProtocol, message: dict):
         """Envoie un message à un client particulier."""
@@ -50,10 +64,38 @@ class MessageBus:
         except Exception as e:
             print(f"[Bus] Erreur envoi vers client: {e}")
 
-    async def ws_handler(self, websocket: WebSocketServerProtocol):
-        """Gestionnaire de connexion client."""
+    def _extract_token_from_path(self, path: str) -> Optional[str]:
+        """Extrait le token d'authentification de la query string WebSocket."""
+        try:
+            parsed = urllib.parse.urlparse(path)
+            query_params = urllib.parse.parse_qs(parsed.query)
+            token = query_params.get("token", [None])[0]
+            return token
+        except Exception:
+            return None
+
+    async def ws_handler(self, websocket: WebSocketServerProtocol, path: str = ""):
+        """Gestionnaire de connexion client avec validation de token d'authentification."""
+        # Récupérer le chemin selon la version de websockets
+        req_path = path or getattr(websocket, "path", "")
+        if not req_path and hasattr(websocket, "request"):
+            req_path = getattr(websocket.request, "path", "")
+
+        token_sent = self._extract_token_from_path(req_path)
+        
+        # Vérification du token si configuré
+        if self.auth_token:
+            if token_sent != self.auth_token:
+                print(f"[Bus] Connexion refusée : token d'authentification invalide ou absent.")
+                await self.send_to(websocket, {
+                    "type": "error",
+                    "message": "Connexion WebSocket refusée : authentification requise."
+                })
+                await websocket.close(code=4001, reason="Unauthorized")
+                return
+
         self.clients.add(websocket)
-        print(f"[Bus] Nouveau client connecté. Total: {len(self.clients)}")
+        print(f"[Bus] Nouveau client authentifié connecté. Total: {len(self.clients)}")
 
         # Envoyer l'état initial au nouveau client
         initial_state = {
@@ -66,7 +108,7 @@ class MessageBus:
         }
         settings = {
             "type": "settings",
-            "data": config.config
+            "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
         }
         await self.send_to(websocket, initial_state)
         await self.send_to(websocket, mic_state)
@@ -78,6 +120,15 @@ class MessageBus:
                     data = json.loads(raw_msg)
                     msg_type = data.get("type", "")
                     if msg_type in self._handlers:
+                        # Validation Pydantic optionnelle (core.protocol) pour les types connus
+                        try:
+                            from core.protocol import VALIDATORS
+                            validator = VALIDATORS.get(msg_type)
+                            if validator is not None:
+                                validator(**data)
+                        except Exception as v_err:
+                            await self.send_to(websocket, {"type": "error", "message": f"Message invalide ({msg_type}): {v_err}"})
+                            continue
                         await self._handlers[msg_type](data, websocket)
                     else:
                         print(f"[Bus] Type de message inconnu reçu: {msg_type}")
@@ -94,8 +145,15 @@ class MessageBus:
     async def start_server(self, host: str, port: int):
         """Démarre le serveur WebSocket."""
         self.loop = asyncio.get_running_loop()
-        print(f"[Bus] Démarrage du WebSocket sur ws://{host}:{port}")
-        server = await websockets.serve(self.ws_handler, host, port)
+        print(f"[Bus] Démarrage du WebSocket sur ws://{host}:{port} (Auth: active)")
+        try:
+            # Compatibilité websockets v13+ et versions antérieures
+            server = await websockets.serve(self.ws_handler, host, port)
+        except TypeError:
+            # Si le wrapper n'accepte pas deux arguments websocket/path
+            async def compat_handler(ws):
+                await self.ws_handler(ws)
+            server = await websockets.serve(compat_handler, host, port)
         return server
 
 bus = MessageBus()

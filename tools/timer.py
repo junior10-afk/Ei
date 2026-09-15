@@ -145,3 +145,24 @@ def cancel_timer(label: Optional[str] = None) -> Dict[str, Any]:
             "speech": "Aucun minuteur actif à annuler.",
             "data": {"cancelled": False}
         }
+
+@tool_registry.register(
+    name="schedule_reminder",
+    description="Programme un rappel proactif vocal et visuel pour plus tard (ex: dans 10 minutes, dans 2 heures)",
+    parameters={
+        "message": "str (ce dont il faut se rappeler, ex: 'Prendre mes médicaments', 'Appeler le client')",
+        "delay_minutes": "int (dans combien de minutes déclencher le rappel, défaut: 15)",
+        "label": "optional str (intitulé court du rappel, ex: 'Santé', 'Projet')"
+    },
+    category="system"
+)
+def schedule_reminder(message: str, delay_minutes: int = 15, label: str = "Rappel") -> Dict[str, Any]:
+    from core.scheduler import scheduler
+    delay_sec = max(5, int(delay_minutes) * 60)
+    rem_id = scheduler.add_reminder(message=message, delay_seconds=delay_sec, label=label)
+    speech = f"C'est noté. Je vous rappellerai « {message} » dans {delay_minutes} minute{'s' if int(delay_minutes) > 1 else ''}."
+    return {
+        "speech": speech,
+        "data": {"reminder_id": rem_id, "message": message, "delay_minutes": delay_minutes}
+    }
+

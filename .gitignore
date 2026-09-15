@@ -1,13 +1,16 @@
-# Python
+# Python & Caches
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
+.venv/
+venv/
+ENV/
 build/
 develop-eggs/
-/dist/
+dist/
 downloads/
 eggs/
 .eggs/
@@ -20,15 +23,27 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Secrets & Environment
 .env
-.venv
-venv/
-ENV/
+.env.*
+!.env.example
 
 # Node / Frontend
 frontend/node_modules/
+node_modules/
 frontend/.vite/
+.vite/
+frontend/dist/
+dist/
 
-# Temporary files & logs
+# Persistence, Logs & Temp
+logs/
 *.log
+data/*.db
+data/ei_memory.db
+*.sqlite
+*.sqlite3
+*.db
 memory.json
+

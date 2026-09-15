@@ -1,210 +1,238 @@
 import re
+import os
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor, Future
 from typing import Optional, Dict, Any
 from core.state import state_manager, AssistantState
 from core.bus import bus
+from core.config import config
 from voice.tts import tts_engine
 from voice.wake import check_wake_word, contains_stop_word
 from brain.local_replies import check_local_reply, get_wake_ack
 from brain.llm import llm_cascade
+from brain.agent_loop import agent_engine
+from brain.session_memory import session_memory
 from tools.registry import tool_registry
+
 
 class Dispatcher:
     def __init__(self):
-        self._lock = threading.Lock()
+        self._executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ei_dispatcher")
+        self._cancel_event = threading.Event()
+        self._current_future: Optional[Future] = None
+
+    def cancel(self):
+        """Annule immédiatement toute opération vocale, cognitive ou outil en cours."""
+        self._cancel_event.set()
+        agent_engine.cancel()
+        tts_engine.stop()
+        state_manager.set_state(AssistantState.IDLE)
+        print("[Dispatcher] Annulation globale demandée par l'utilisateur.")
 
     def process_text_input(self, raw_text: str, is_voice: bool = False):
         """
         Point d'entrée unique pour la voix ou le clavier.
-        Exécuté en tâche de fond pour ne pas bloquer.
+        Exécuté via le ThreadPoolExecutor pour éviter la prolifération de threads zombies.
         """
-        threading.Thread(target=self._process_sync, args=(raw_text, is_voice), daemon=True).start()
+        if contains_stop_word(raw_text):
+            self.cancel()
+            return
 
-    def _match_deterministic_tools(self, text: str) -> Optional[Dict[str, Any]]:
-        """Détection déterministe ultra-rapide par regex avant l'appel LLM."""
-        clean = text.lower().strip()
+        self._cancel_event.clear()
+        self._current_future = self._executor.submit(self._process_sync, raw_text, is_voice)
 
-        # 1. Ouvrir une application
-        open_match = re.search(r"(?:ouvre|lance|démarre)\s+(?:le\s+|la\s+|l'|l\s+|un\s+|une\s+)?(chrome|navigateur|edge|firefox|bloc-notes|notepad|calculatrice|calc|youtube|code|vscode|spotify|explorateur)", clean)
-        if open_match:
-            app_target = open_match.group(1)
-            return {"action": "open_app", "params": {"app_name": app_target}}
+    def _brain_available(self) -> bool:
+        """True si le cerveau préféré a ce qu'il faut pour tourner (clé API)."""
+        preferred = (config.get("preferred_brain", "gemini") or "gemini").lower()
+        if preferred == "gemini":
+            return bool(config.gemini_api_key or os.getenv("GEMINI_API_KEY"))
+        return True
 
-        # 2. Ouvrir un site web
-        site_match = re.search(r"(?:ouvre le site|va sur)\s+(https?://\S+|www\.\S+|\S+\.(?:com|fr|org|net))", clean)
-        if site_match:
-            return {"action": "open_website", "params": {"url": site_match.group(1)}}
-
-        # 3. Réglage du volume Windows
-        vol_match = re.search(r"(?:mets le volume à|règle le volume à|volume à)\s+(\d{1,3})", clean)
-        if vol_match:
-            return {"action": "set_system_volume", "params": {"level": int(vol_match.group(1))}}
-
-        # 4. Météo
-        weather_match = re.search(r"(?:météo|quel temps fait-il)(?:\s+(?:à|pour|dans)\s+([a-zA-ZÀ-ÿ\s-]+))?", clean)
-        if weather_match:
-            city = weather_match.group(1) if weather_match.group(1) else "Paris"
-            return {"action": "get_weather", "params": {"city": city.strip()}}
-
-        # 5. Ouvrir un dossier
-        folder_match = re.search(r"(?:ouvre le dossier|dossier)\s+(?:du\s+|des\s+|de\s+)?(bureau|desktop|documents|téléchargements|downloads|images|musique)", clean)
-        if folder_match:
-            return {"action": "open_folder", "params": {"path": folder_match.group(1)}}
-
-        # 6. Mémoriser une information
-        memo_match = re.search(r"(?:mémorise|rappelle-toi que|note que)\s+([a-zA-ZÀ-ÿ0-9\s]+?)\s+(?:est|c'est|vaut)\s+(.+)", clean)
-        if memo_match:
-            return {
-                "action": "remember_fact",
-                "params": {"key": memo_match.group(1).strip(), "value": memo_match.group(2).strip()}
-            }
-
-        # 8. Minuteur / Timer
-        cancel_timer_match = re.search(r"(?:annule|supprime|arrête)\s+(?:le\s+|les\s+)?(?:minuteur|timer|compte à rebours)", clean)
-        if cancel_timer_match:
-            return {"action": "cancel_timer", "params": {}}
-
-        timer_match = re.search(r"(?:(?:mets|lance|programme|démarre)\s+(?:un\s+)?(?:minuteur|timer|compte à rebours)|minuteur|timer)\s+(?:de\s+)?(\d+)\s*(seconde|secondes|sec|minute|minutes|min|heure|heures|h)(?:\s+(?:pour|de|intitulé)\s+([a-zA-ZÀ-ÿ0-9\s]+))?", clean)
-        if timer_match:
-            dur = int(timer_match.group(1))
-            unit_str = timer_match.group(2)
-            label = timer_match.group(3).strip() if timer_match.group(3) else "Minuteur"
-            return {
-                "action": "set_timer",
-                "params": {"duration": dur, "unit": unit_str, "label": label}
-            }
-
-        # 9. Panneaux HUD (Paramètres / Historique / Orbes)
-        open_panel_match = re.search(r"(?:ouvre|affiche|montre)\s+(?:le\s+panneau\s+|les\s+|la\s+)?(paramètres|parametres|réglages|reglages|configuration|historique|console|chat|journal|orbes|orbe|galerie|galerie des orbes)", clean)
-        if open_panel_match:
-            target = open_panel_match.group(1)
-            if target in ["paramètres", "parametres", "réglages", "reglages", "configuration"]:
-                panel_type = "settings"
-            elif target in ["orbes", "orbe", "galerie", "galerie des orbes"]:
-                panel_type = "orbs"
-            else:
-                panel_type = "chat"
-            return {"action": "open_panel", "params": {"panel": panel_type}}
-
-        close_panel_match = re.search(r"(?:ferme|masque|cache)\s+(?:le\s+panneau\s+|les\s+|la\s+)?(paramètres|parametres|réglages|reglages|configuration|historique|console|chat|journal|orbes|orbe|galerie|panneau|panneaux)", clean)
-        if close_panel_match:
-            target = close_panel_match.group(1)
-            if target in ["paramètres", "parametres", "réglages", "reglages", "configuration"]:
-                panel_type = "settings"
-            elif target in ["orbes", "orbe", "galerie"]:
-                panel_type = "orbs"
-            elif target in ["historique", "console", "chat", "journal"]:
-                panel_type = "chat"
-            else:
-                panel_type = "all"
-            return {"action": "close_panel", "params": {"panel": panel_type}}
-
-        # 10. Sélection directe d'un orbe 3D par la voix
-        set_orb_match = re.search(r"(?:mets|active|charge|sélectionne|selectionne|change pour)\s+(?:l'orbe|l\s+orbe|l'orbe\s+de\s+|le\s+style|le\s+thème|l'orb|l\s+orb)\s+(.+)", clean)
-        if set_orb_match:
-            orb_query = set_orb_match.group(1).strip()
-            return {"action": "set_orb", "params": {"preset_name": orb_query}}
-
-        return None
-
-    def _parse_llm_action(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """Tente d'extraire un JSON d'action de la réponse LLM."""
-        text = response_text.strip()
-        # Rechercher un bloc JSON { "action": ... }
-        json_match = re.search(r"\{[\s\S]*\"action\"[\s\S]*\}", text)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(0))
-                if "action" in data:
-                    return data
-            except Exception:
-                pass
+    def _route_query(self, text: str) -> Optional[Dict[str, Any]]:
+        """Repli HORS-LINE uniquement : règles de secours définies dans config.default.json
+        (agent.fallback_rules), appliquées seulement quand le cerveau est indisponible.
+        Le LLM reste le point de décision principal dans tous les autres cas."""
+        rules = (config.get("agent", {}) or {}).get("fallback_rules", [])
+        for rule in rules:
+            m = re.search(rule.get("pattern", ""), text, re.IGNORECASE)
+            if not m:
+                continue
+            params = {}
+            for k, v in (rule.get("params") or {}).items():
+                if isinstance(v, str):
+                    for i, group in enumerate(m.groups() or [], start=1):
+                        v = v.replace("{" + str(i) + "}", group)
+                    if v.isdigit():
+                        v = int(v)
+                params[k] = v
+            return {"action": rule["action"], "params": params}
         return None
 
     def _process_sync(self, raw_text: str, is_voice: bool):
-        with self._lock:
-            # 1. Vérification Stop direct
-            if contains_stop_word(raw_text):
-                tts_engine.stop()
-                state_manager.set_state(AssistantState.IDLE)
-                return
+        if self._cancel_event.is_set():
+            return
 
-            query = raw_text.strip()
+        # 1. Vérification Stop direct
+        if contains_stop_word(raw_text):
+            self.cancel()
+            return
 
-            # 2. Filtrage Wake Word
-            if is_voice:
-                has_wake, is_only, clean_query = check_wake_word(query)
-                if has_wake:
-                    from core.config import config
-                    from core.utils import play_chime
-                    if config.get("sound_feedback", True):
-                        play_chime("wake")
+        query = raw_text.strip()
 
-                    if is_only:
-                        # Wake word seul -> réponse rapide immédiate
-                        ack = get_wake_ack()
-                        tts_engine.speak(ack)
-                        return
-                    query = clean_query
-                # Si pas de wake word à la voix, on ignore
-                else:
-                    state_manager.set_state(AssistantState.IDLE)
-                    return
-            else:
-                # Saisie clavier : on nettoie aussi le wake word s'il est tapé
-                _, is_only, clean_query = check_wake_word(query)
+        # 2. Filtrage Wake Word
+        if is_voice:
+            has_wake, is_only, clean_query = check_wake_word(query)
+            if has_wake:
+                from core.utils import play_chime
+                if config.get("sound_feedback", True):
+                    play_chime("wake")
+
                 if is_only:
-                    tts_engine.speak(get_wake_ack())
+                    ack = get_wake_ack()
+                    tts_engine.speak(ack)
                     return
                 query = clean_query
-
-            if not query:
+            else:
                 state_manager.set_state(AssistantState.IDLE)
                 return
-
-            state_manager.set_state(AssistantState.THINKING)
-
-            # 3. Réponses locales immédiates (0 latence, 0 coût)
-            local_ans = check_local_reply(query)
-            if local_ans:
-                tts_engine.speak(local_ans)
+        else:
+            _, is_only, clean_query = check_wake_word(query)
+            if is_only:
+                tts_engine.speak(get_wake_ack())
                 return
+            query = clean_query
 
-            # 4. Détection déterministe d'outils
-            direct_tool = self._match_deterministic_tools(query)
-            if direct_tool:
-                res = tool_registry.execute(direct_tool["action"], direct_tool.get("params", {}))
-                # Diffuser l'action exécutée au HUD
-                bus.broadcast_threadsafe({
-                    "type": "action",
-                    "action": direct_tool["action"],
-                    "params": direct_tool.get("params", {}),
-                    "result": res.get("result")
-                })
+        if not query or self._cancel_event.is_set():
+            state_manager.set_state(AssistantState.IDLE)
+            return
+
+        state_manager.set_state(AssistantState.THINKING)
+
+        # 3. Réponses locales immédiates (0 latence, 0 coût)
+        local_ans = check_local_reply(query)
+        if local_ans:
+            session_memory.add_user_message(query)
+            session_memory.add_assistant_message(local_ans)
+            tts_engine.speak(local_ans)
+            return
+
+        # 4. Repli hors-ligne : règles de secours SEULEMENT si le cerveau est indisponible
+        if not self._brain_available():
+            fallback = self._route_query(query)
+            if fallback:
+                res = tool_registry.execute(fallback["action"], fallback.get("params", {}))
                 speech_text = res.get("speech", "Action effectuée.")
+                session_memory.add_user_message(query)
+                session_memory.add_assistant_message(speech_text)
                 tts_engine.speak(speech_text)
                 return
 
-            # 5. Appel à la cascade LLM
-            llm_response = llm_cascade.ask(query)
+        if self._cancel_event.is_set():
+            return
 
-            # Vérifier si le LLM a renvoyé un ordre d'action JSON
-            action_data = self._parse_llm_action(llm_response)
-            if action_data:
-                action_name = action_data.get("action")
-                params = action_data.get("params", {})
-                res = tool_registry.execute(action_name, params)
-                bus.broadcast_threadsafe({
-                    "type": "action",
-                    "action": action_name,
-                    "params": params,
-                    "result": res.get("result")
-                })
-                speech_text = res.get("speech", "Action accomplie.")
-                tts_engine.speak(speech_text)
+        # 5. Routage de modèle puis exécution découplée (Phase 1 §1.2+1.3) :
+        # filler rapide (tiers.light) en parallèle du worker lourd (tiers.heavy).
+        # Le fast path ne bloque jamais sur le slow path.
+        from core.models import route_model_for_task
+        import concurrent.futures as _cf
+        route = route_model_for_task(query)
+        model = route.get("model")
+        if model:
+            bus.broadcast_threadsafe({
+                "type": "model_used",
+                "model_id": model.get("id"),
+                "label": model.get("label", model.get("id")),
+                "tier": route.get("tier"),
+            })
+
+        if self._cancel_event.is_set():
+            return
+
+        streamed = {"n": 0, "sentences": [], "filler_spoken": False}
+
+        def _on_sentence(sentence: str):
+            if self._cancel_event.is_set():
+                return
+            streamed["n"] += 1
+            streamed["sentences"].append(sentence)
+            tts_engine.feed_sentence(sentence, priority=0)
+
+        heavy_ex = _cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix="ei_heavy")
+        try:
+            fut_heavy = heavy_ex.submit(agent_engine.run, query, model, _on_sentence)
+            fut_filler = heavy_ex.submit(self._quick_ack, query)
+            # Période de grâce : si le lourd répond en < 2 s, pas de filler
+            done, _ = _cf.wait([fut_heavy], timeout=2.0)
+            if fut_heavy not in done and not self._cancel_event.is_set():
+                try:
+                    ack = fut_filler.result(timeout=8.0)
+                except Exception:
+                    ack = None
+                if ack and not fut_heavy.done() and not self._cancel_event.is_set():
+                    bus.broadcast_threadsafe({"type": "speech_provisional", "text": ack})
+                    tts_engine.speak(ack, priority=1)
+                    streamed["filler_spoken"] = True
+            speech_summary, detailed_output = fut_heavy.result()
+        finally:
+            heavy_ex.shutdown(wait=False, cancel_futures=True)
+
+        if self._cancel_event.is_set():
+            return
+
+        # Le résultat lourd préempte le filler éventuellement en cours.
+        # Attention : stop() vide aussi la file -> ré-enfiler les phrases déjà
+        # streamées pour ne pas perdre la réponse.
+        if streamed["n"] > 0:
+            if streamed["filler_spoken"]:
+                tts_engine.stop()
+                for s in streamed["sentences"]:
+                    tts_engine.feed_sentence(s, priority=0)
+            # else: la réponse est déjà en cours de lecture, ne rien couper
+        elif streamed["filler_spoken"]:
+            tts_engine.stop()  # coupe le filler
+        bus.broadcast_threadsafe({"type": "speech_final", "text": speech_summary})
+
+        # Diffusion du plan complet et des résultats détaillés au chat / console du HUD
+        bus.broadcast_threadsafe({
+            "type": "long_response",
+            "text": detailed_output,
+            "model": (model or {}).get("label", "")
+        })
+
+        # Si le streaming a déjà fait entendre la réponse phrase par phrase,
+        # ne pas la répéter. Sinon, synthèse vocale concise (ancien comportement).
+        if streamed["n"] == 0 and speech_summary:
+            tts_engine.speak(speech_summary, priority=0)
+
+    def _quick_ack(self, query: str) -> Optional[str]:
+        """Accusé de réception ultra-court via le tiers léger (jamais bloquant :
+        None à la moindre erreur)."""
+        try:
+            tiers = (config.get("models", {}) or {}).get("tiers", {}) or {}
+            light_ref = str(tiers.get("light", "") or "")
+            if "/" in light_ref:
+                prov, mod = light_ref.split("/", 1)
             else:
-                # Réponse conversationnelle libre
-                tts_engine.speak(llm_response)
+                prov, mod = "gemini", light_ref or "gemini-2.5-flash"
+            key_env = {"gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY",
+                       "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY",
+                       "xai": "XAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY",
+                       "openrouter": "OPENROUTER_API_KEY"}.get(prov.lower(), "")
+            model_info = {"provider": prov.lower(), "model": mod, "key_env": key_env,
+                          "max_tokens": 64}
+            ack = llm_cascade.ask_with_model(
+                f"Demande de l'utilisateur : {query}",
+                model_info,
+                "Tu es Ei. Accuse réception de la demande en UNE seule phrase très "
+                "courte (15 mots max), naturelle, en français, sans markdown. "
+                "Ne réponds PAS à la demande, dis seulement que tu t'en occupes.",
+                include_history=False,  # accusé autonome : latence minimale
+            )
+            if ack:
+                ack = ack.strip().split("\n")[0][:200]
+            return ack or None
+        except Exception:
+            return None
 
 dispatcher = Dispatcher()

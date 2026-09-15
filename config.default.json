@@ -12,5 +12,22 @@
   "sound_feedback": true,
   "orb_theme": "cyber_blue",
   "orb_animation": "plasma",
-  "auto_listen": true
+  "auto_listen": true,
+  "chat_autoshow": true,
+  "tools_default_permission": "ask",
+  "model_choice_mode": "ask",
+  "models": {
+    "tiers": {
+      "chat": "gemini-flash",
+      "light": "groq-llama-70b",
+      "heavy": "gemini-pro"
+    }
+  },
+  "agent": {
+    "fallback_rules": [
+      { "pattern": "^annule(?:r)?\\s+(?:le\\s+|les\\s+)?(minuteur|timer|compte à rebours)", "action": "cancel_timer", "params": {} },
+      { "pattern": "^mets?\\s+(?:le\\s+)?volume\\s+(?:à|a)\\s+(\\d{1,3})", "action": "set_system_volume", "params": { "level": "{1}" } },
+      { "pattern": "^ouvre\\s+(?:le\\s+|la\\s+|l')?(chrome|edge|firefox|notepad|bloc-notes|calculatrice|spotify|youtube)$", "action": "open_app", "params": { "app_name": "{1}" } }
+    ]
+  }
 }

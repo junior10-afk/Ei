@@ -9,6 +9,11 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
+from core.logging_config import setup_logging
+
+verbose = "--verbose" in sys.argv or "-v" in sys.argv
+logger = setup_logging(verbose=verbose)
+
 from core.config import config
 from core.state import state_manager, AssistantState
 from core.bus import bus
@@ -38,23 +43,209 @@ async def handle_stop_audio(data: dict, websocket):
 async def handle_get_settings(data: dict, websocket):
     await bus.send_to(websocket, {
         "type": "settings",
-        "data": config.config
+        "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
     })
+
+async def handle_list_mics(data: dict, websocket):
+    """Renvoie les micros d'entrée détectés + la sélection courante."""
+    from voice.mic import list_input_devices
+    devices = await asyncio.get_running_loop().run_in_executor(None, list_input_devices)
+    await bus.send_to(websocket, {
+        "type": "mic_devices",
+        "devices": devices,
+        "current": config.get("mic_device_index", None),
+    })
+
+async def handle_set_mic(data: dict, websocket):
+    """Bascule le micro actif (index sounddevice, null = défaut système)."""
+    from voice.mic import mic_listener
+    raw = data.get("index", None)
+    try:
+        index = None if raw is None or str(raw).lower() in ("null", "default", "") else int(raw)
+    except (ValueError, TypeError):
+        await bus.send_to(websocket, {"type": "mic_result", "ok": False,
+                                       "message": "Index invalide."})
+        return
+    config.update({"mic_device_index": index})
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, mic_listener.restart)
+    name = "défaut système" if index is None else f"périphérique {index}"
+    print(f"[Run] Micro basculé sur : {name}.")
+    await bus.broadcast({"type": "mic_result", "ok": True, "index": index})
+
+async def handle_set_api_key(data: dict, websocket):
+    """Enregistre une clé API dans .env (jamais dans config.json) et confirme."""
+    var = (data.get("var") or data.get("variable") or "").upper().strip()
+    value = (data.get("value") or "").strip()
+    if var not in config.API_KEY_VARS:
+        await bus.send_to(websocket, {"type": "api_key_result", "var": var,
+                                       "ok": False, "message": "Variable non autorisée."})
+        return
+    config.set_env_var(var, value)
+
+    # Réinitialiser le cooldown sur ce provider pour qu'il soit utilisable immédiatement
+    from brain.llm import llm_cascade
+    prov_map = {
+        "GEMINI_API_KEY": "gemini",
+        "GROQ_API_KEY": "groq",
+        "OPENAI_API_KEY": "openai",
+        "MISTRAL_API_KEY": "mistral",
+        "XAI_API_KEY": "xai",
+        "ANTHROPIC_API_KEY": "anthropic",
+        "OPENROUTER_API_KEY": "openrouter"
+    }
+    prov = prov_map.get(var)
+    if prov:
+        llm_cascade.clear_cooldown(prov)
+
+    await bus.broadcast({
+        "type": "settings",
+        "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
+    })
+    # Mettre à jour le catalogue affiché côté HUD
+    from core.models import catalog_public_view
+    await bus.broadcast({
+        "type": "models_catalog",
+        "options": catalog_public_view(),
+        "tiers": config.get("models", {}).get("tiers", {}),
+        "choice_mode": config.get("model_choice_mode", "auto"),
+    })
+    print(f"[Run] Clé {var} mise à jour ({'effacée' if not value else 'enregistrée'}).")
+
+async def handle_test_api_key(data: dict, websocket):
+    """Teste la connexion d'un fournisseur et renvoie le résultat au HUD."""
+    from brain.api_test import test_api_key
+    provider = (data.get("provider") or "").lower()
+    result = await asyncio.get_running_loop().run_in_executor(None, test_api_key, provider)
+    await bus.send_to(websocket, {"type": "api_key_result", "provider": provider, **result})
 
 async def handle_update_settings(data: dict, websocket):
     new_settings = data.get("data", {})
+    # Les clés API ne passent jamais par config.json (fichier versionné)
+    new_settings.pop("api_keys_status", None)
+    # Fusion profonde de "models" (pour ne pas écraser le catalog éventuel)
+    if isinstance(new_settings.get("models"), dict):
+        merged = {**(config.get("models") or {}), **new_settings["models"]}
+        tiers_new = new_settings["models"].get("tiers")
+        if isinstance(tiers_new, dict):
+            merged["tiers"] = {**(merged.get("tiers") or {}), **tiers_new}
+        new_settings["models"] = merged
     config.update(new_settings)
     await bus.broadcast({
         "type": "settings",
-        "data": config.config
+        "data": {**config.config, "api_keys_status": config.get_api_keys_status()}
+    })
+    # Confirmer le nouveau routage au HUD
+    from core.models import catalog_public_view
+    await bus.broadcast({
+        "type": "models_catalog",
+        "options": catalog_public_view(),
+        "tiers": config.get("models", {}).get("tiers", {}),
+        "choice_mode": config.get("model_choice_mode", "auto"),
+    })
+
+async def handle_model_select_response(data: dict, websocket):
+    """Réponse de l'utilisateur à la fenêtre de sélection de modèle."""
+    from core.models import model_choice
+    model_id = data.get("model_id")
+    model_choice.resolve(model_id)
+    await bus.broadcast({
+        "type": "model_select_closed",
+        "model_id": model_id
+    })
+
+async def handle_get_models(data: dict, websocket):
+    """Le HUD demande le catalogue des modèles (pour les réglages)."""
+    from core.models import catalog_public_view
+    await bus.send_to(websocket, {
+        "type": "models_catalog",
+        "options": catalog_public_view(),
+        "tiers": config.get("models", {}).get("tiers", {}),
+        "choice_mode": config.get("model_choice_mode", "auto"),
+    })
+
+async def handle_list_provider_models(data: dict, websocket):
+    """Liste en direct les modèles réellement offerts par un fournisseur
+    (Google, Groq, OpenAI, Mistral, Ollama) avec la clé enregistrée."""
+    from brain.providers import list_provider_models
+    provider = (data.get("provider") or "").lower()
+    result = await asyncio.get_running_loop().run_in_executor(None, list_provider_models, provider)
+    await bus.send_to(websocket, {
+        "type": "provider_models",
+        "provider": provider,
+        **result,
+    })
+
+async def handle_tool_confirmation_response(data: dict, websocket):
+    """Réponse de l'utilisateur à une demande de confirmation d'action sensible."""
+    from tools.registry import tool_confirmation_manager
+    req_id = data.get("request_id")
+    confirmed = bool(data.get("confirmed", False))
+    tool_confirmation_manager.resolve(req_id, confirmed)
+
+async def handle_cancel_task(data: dict, websocket):
+    from core.task_manager import task_manager
+    task_id = data.get("task_id")
+    if task_id:
+        task_manager.cancel_task(task_id)
+
+async def handle_get_tasks(data: dict, websocket):
+    from core.task_manager import task_manager
+    await bus.send_to(websocket, {
+        "type": "tasks_list",
+        "tasks": task_manager.list_tasks()
+    })
+
+async def handle_list_tools(data: dict, websocket):
+    """Tableau de bord permissions : outils + permission effective."""
+    from tools.registry import tool_registry
+    tools = await asyncio.get_running_loop().run_in_executor(None, tool_registry.describe_all)
+    await bus.send_to(websocket, {
+        "type": "tools_list",
+        "tools": tools,
+        "default_permission": tool_registry.get_permission("__none__"),
+    })
+
+async def handle_set_tool_permission(data: dict, websocket):
+    """Définit la permission d'un outil (allow/ask/deny)."""
+    from tools.registry import tool_registry
+    tool = data.get("tool", "")
+    permission = data.get("permission", "")
+    ok = await asyncio.get_running_loop().run_in_executor(
+        None, tool_registry.set_permission, tool, permission)
+    await bus.broadcast({
+        "type": "tool_permission_result",
+        "tool": tool,
+        "ok": ok,
+        "permission": permission if ok else None,
+    })
+
+async def handle_get_routines(data: dict, websocket):
+    from core.scheduler import scheduler
+    await bus.send_to(websocket, {
+        "type": "routines_list",
+        "routines": scheduler.list_routines()
     })
 
 def setup_ws_handlers():
     bus.register_handler("user_input", handle_user_input)
     bus.register_handler("toggle_mic", handle_toggle_mic)
+    bus.register_handler("list_mics", handle_list_mics)
+    bus.register_handler("set_mic", handle_set_mic)
     bus.register_handler("stop_audio", handle_stop_audio)
     bus.register_handler("get_settings", handle_get_settings)
     bus.register_handler("update_settings", handle_update_settings)
+    bus.register_handler("set_api_key", handle_set_api_key)
+    bus.register_handler("test_api_key", handle_test_api_key)
+    bus.register_handler("list_provider_models", handle_list_provider_models)
+    bus.register_handler("model_select_response", handle_model_select_response)
+    bus.register_handler("get_models", handle_get_models)
+    bus.register_handler("tool_confirmation_response", handle_tool_confirmation_response)
+    bus.register_handler("cancel_task", handle_cancel_task)
+    bus.register_handler("get_tasks", handle_get_tasks)
+    bus.register_handler("list_tools", handle_list_tools)
+    bus.register_handler("set_tool_permission", handle_set_tool_permission)
+    bus.register_handler("get_routines", handle_get_routines)
 
 def main():
     print("=" * 60)
@@ -74,6 +265,19 @@ def main():
     # 1. Démarrer le serveur Web statique pour le frontend HUD
     serve_static(port=vite_port)
 
+    # 1.b Préchauffage Phase 1 §1.4 (background, non-bloquant) : construit le
+    # client Gemini persistant pour que le premier tour ne paie pas l'init.
+    def _warmup_models():
+        try:
+            from brain.llm import llm_cascade
+            key = (config.gemini_api_key or os.getenv("GEMINI_API_KEY", "")).strip().strip('"\'')
+            if key:
+                llm_cascade._gemini_client_cached(key)
+                print("[Run] Client Gemini préchauffé.")
+        except Exception as e:
+            print(f"[Run] Préchauffage modèle ignoré: {e}")
+    threading.Thread(target=_warmup_models, daemon=True).start()
+
     # 2. Démarrer la boucle asyncio pour le WebSocket dans un thread séparé
     ws_host = config.host
     ws_port = config.ws_port
@@ -88,22 +292,25 @@ def main():
     ws_thread = threading.Thread(target=run_ws_loop, daemon=True)
     ws_thread.start()
 
-    # 2.b Télémétrie CPU/RAM pour le HUD central
+    # 2.b Télémétrie CPU/RAM pour le HUD central (économique si aucun client connecté)
     import psutil
     def broadcast_stats_loop():
         time.sleep(2)
         while True:
             try:
-                cpu = psutil.cpu_percent(interval=1.0)
-                ram = psutil.virtual_memory().percent
-                bus.broadcast_threadsafe({
-                    "type": "system_stats",
-                    "cpu": cpu,
-                    "ram": ram
-                })
+                if len(bus.clients) > 0:
+                    cpu = psutil.cpu_percent(interval=1.0)
+                    ram = psutil.virtual_memory().percent
+                    bus.broadcast_threadsafe({
+                        "type": "system_stats",
+                        "cpu": cpu,
+                        "ram": ram
+                    })
+                else:
+                    time.sleep(2.0)
             except Exception:
                 pass
-            time.sleep(1.0)
+            time.sleep(1.5)
 
     stats_thread = threading.Thread(target=broadcast_stats_loop, daemon=True)
     stats_thread.start()
@@ -118,8 +325,8 @@ def main():
     welcome_text = f"Système {assistant_name} initialisé et prêt. Bonjour {user_name}."
     tts_engine.speak(welcome_text)
 
-    # 5. Ouvrir la fenêtre HUD (bloquant jusqu'à la fermeture de la fenêtre)
-    hud_url = f"http://127.0.0.1:{vite_port}"
+    # 5. Ouvrir la fenêtre HUD avec le token de sécurité de session
+    hud_url = f"http://127.0.0.1:{vite_port}/?token={bus.auth_token}"
     open_hud_window(hud_url, title=f"{assistant_name} - Interface HUD")
 
     # Arrêt propre

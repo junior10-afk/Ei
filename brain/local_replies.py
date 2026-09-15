@@ -38,16 +38,13 @@ def check_local_reply(text: str) -> Optional[str]:
         template = random.choice(GREETINGS)
         return template.format(user_name)
 
-    # 2. Remerciements
-    if re.search(r"\b(merci|merci beaucoup|je te remercie|je vous remercie)\b", clean):
+    # 2. Remerciements : UNIQUEMENT si la phrase est un pur remerciement.
+    # (Sinon "merci de m'expliquer X" serait capturé et X ne serait jamais répondu.)
+    if re.fullmatch(r"(merci( beaucoup)?( infiniment)?|je (te|vous) (re|s)mercie( encore)?|thanks)[\s!.]*", clean):
         template = random.choice(THANKS_REPLIES)
         return template.format(user_name)
 
-    # 3. Qui es-tu ?
-    if re.search(r"\b(qui es-tu|qui es tu|comment tu t'appelles|quel est ton nom)\b", clean):
-        return f"Je suis {assistant_name}, votre assistant personnel connecté."
-
-    # 4. Heure actuelle
+    # 3. Heure actuelle (utilitaire déterministe immédiat)
     if re.search(r"\b(quelle heure est-il|l'heure qu'il est|donne-moi l'heure|il est quelle heure)\b", clean):
         now = datetime.datetime.now()
         minute = now.minute

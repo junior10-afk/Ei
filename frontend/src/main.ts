@@ -1,10 +1,20 @@
 import { JarvisOrb, OrbTheme, OrbAnimationStyle } from './orb';
-import { IncomingMessage, AssistantStateType } from './protocol';
+import { IncomingMessage, AssistantStateType, ToolConfirmationRequestMessage } from './protocol';
 import { ChatPanel } from './panels/chat';
 import { SettingsPanel } from './panels/settings';
 import { TimerWidget } from './panels/timer';
 import { OrbsGalleryModal } from './panels/orbs_modal';
+import { ModelSelectModal } from './panels/model_modal';
 import './style.css';
+
+function getEl<T extends HTMLElement = HTMLElement>(id: string): T {
+  const el = document.getElementById(id);
+  if (!el) {
+    console.warn(`[HUD] Element #${id} non trouvé dans le DOM`);
+    return document.createElement('div') as unknown as T;
+  }
+  return el as T;
+}
 
 class JarvisHUD {
   private ws: WebSocket | null = null;
@@ -13,6 +23,8 @@ class JarvisHUD {
   private settingsPanel: SettingsPanel;
   private timerWidget: TimerWidget;
   private orbsModal: OrbsGalleryModal;
+  private modelModal: ModelSelectModal;
+  private chatAutoshow = true;
 
   // Horloge & télémétrie
   private orbTimeEl: HTMLElement;
@@ -54,46 +66,47 @@ class JarvisHUD {
 
   private isMuted: boolean = false;
   private wsPort: number = 8765;
+  private reconnectAttempts: number = 0;
 
   constructor() {
-    const orbContainer = document.getElementById('orb-container')!;
+    const orbContainer = document.getElementById('orb-container') || document.body;
     this.orb = new JarvisOrb({ container: orbContainer });
 
     // 1. DOM Refs Télémétrie
-    this.orbTimeEl = document.getElementById('orb-time-display')!;
-    this.orbDateEl = document.getElementById('orb-date-display')!;
-    this.cpuValueEl = document.getElementById('cpu-value')!;
-    this.ramValueEl = document.getElementById('ram-value')!;
-    this.cpuHudEl = document.getElementById('cpu-hud')!;
-    this.ramHudEl = document.getElementById('ram-hud')!;
+    this.orbTimeEl = getEl('orb-time-display');
+    this.orbDateEl = getEl('orb-date-display');
+    this.cpuValueEl = getEl('cpu-value');
+    this.ramValueEl = getEl('ram-value');
+    this.cpuHudEl = getEl('cpu-hud');
+    this.ramHudEl = getEl('ram-hud');
 
     // 2. Transcription
-    this.userSpeechHudEl = document.getElementById('user-speech-hud')!;
-    this.userSpeechTextEl = document.getElementById('user-speech-text')!;
-    this.subtitleHudEl = document.getElementById('subtitle-hud')!;
-    this.subtitleTextEl = document.getElementById('subtitle-text')!;
-    this.subtitleMetaEl = document.getElementById('subtitle-meta')!;
+    this.userSpeechHudEl = getEl('user-speech-hud');
+    this.userSpeechTextEl = getEl('user-speech-text');
+    this.subtitleHudEl = getEl('subtitle-hud');
+    this.subtitleTextEl = getEl('subtitle-text');
+    this.subtitleMetaEl = getEl('subtitle-meta');
 
     // 3. Statut & Connexion
-    this.statusTextEl = document.getElementById('status-text')!;
-    this.connBadgeEl = document.getElementById('connection-badge')!;
-    this.connLabelEl = document.getElementById('connection-label')!;
+    this.statusTextEl = getEl('status-text');
+    this.connBadgeEl = getEl('connection-badge');
+    this.connLabelEl = getEl('connection-label');
 
     // 4. Contrôles
-    this.micBtn = document.getElementById('mic-btn')!;
-    this.stopBtn = document.getElementById('stop-speech-btn')!;
-    this.keyboardToggleBtn = document.getElementById('keyboard-toggle-btn')!;
-    this.keyboardHudEl = document.getElementById('keyboard-hud')!;
-    this.keyboardInputEl = document.getElementById('keyboard-input') as HTMLInputElement;
-    this.keyboardCloseEl = document.getElementById('keyboard-close')!;
+    this.micBtn = getEl('mic-btn');
+    this.stopBtn = getEl('stop-speech-btn');
+    this.keyboardToggleBtn = getEl('keyboard-toggle-btn');
+    this.keyboardHudEl = getEl('keyboard-hud');
+    this.keyboardInputEl = (document.getElementById('keyboard-input') as HTMLInputElement) || document.createElement('input');
+    this.keyboardCloseEl = getEl('keyboard-close');
 
     // 5. Menu & Commandes
-    this.menuBtn = document.getElementById('jarvis-menu-btn')!;
-    this.menuDropdown = document.getElementById('jarvis-menu-dropdown')!;
-    this.commandsPanel = document.getElementById('commands-panel')!;
-    this.commandsClose = document.getElementById('commands-close')!;
-    this.commandsOverlay = document.getElementById('commands-overlay')!;
-    this.commandsSearch = document.getElementById('commands-search') as HTMLInputElement;
+    this.menuBtn = getEl('jarvis-menu-btn');
+    this.menuDropdown = getEl('jarvis-menu-dropdown');
+    this.commandsPanel = getEl('commands-panel');
+    this.commandsClose = getEl('commands-close');
+    this.commandsOverlay = getEl('commands-overlay');
+    this.commandsSearch = (document.getElementById('commands-search') as HTMLInputElement) || document.createElement('input');
 
     // 6. Panneaux et widgets
     this.chatPanel = new ChatPanel();
@@ -132,10 +145,16 @@ class JarvisHUD {
         this.orb.setQuality(newSettings.orb_quality as 'low' | 'medium' | 'high');
       }
       this.send({ type: 'update_settings', data: newSettings });
-    });
+    }, (payload) => this.send(payload));
 
     this.timerWidget = new TimerWidget(() => {
       this.sendUserInput('annule le minuteur');
+    });
+
+    this.modelModal = new ModelSelectModal((payload) => {
+      this.send(payload);
+      this.chatPanel.addMessage('action',
+        payload.model_id === 'auto' ? 'Choix du modèle : automatique' : `Modèle sélectionné : ${payload.model_id}`);
     });
 
     this.initClock();
@@ -217,12 +236,29 @@ class JarvisHUD {
       this.menuDropdown.classList.add('hidden');
     });
 
+    // Raccourcis directs de la barre inférieure (Dock flottant)
+    document.getElementById('dock-btn-commands')?.addEventListener('click', () => {
+      this.commandsPanel.classList.toggle('hidden');
+    });
+    document.getElementById('dock-btn-orbs')?.addEventListener('click', () => {
+      this.orbsModal.show();
+    });
+    document.getElementById('dock-btn-chat')?.addEventListener('click', () => {
+      this.chatPanel.toggle();
+    });
+    document.getElementById('dock-btn-settings')?.addEventListener('click', () => {
+      this.settingsPanel.toggle();
+    });
+
     // Terminal Clavier Direct
     this.keyboardToggleBtn.addEventListener('click', () => {
       this.toggleKeyboard();
     });
 
     this.keyboardCloseEl.addEventListener('click', () => {
+      this.keyboardHudEl.classList.add('hidden');
+    });
+    document.getElementById('keyboard-backdrop')?.addEventListener('click', () => {
       this.keyboardHudEl.classList.add('hidden');
     });
 
@@ -323,15 +359,20 @@ class JarvisHUD {
   }
 
   private connectWebSocket() {
-    const wsUrl = `ws://${window.location.hostname || '127.0.0.1'}:${this.wsPort}`;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const wsUrl = `ws://${window.location.hostname || '127.0.0.1'}:${this.wsPort}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
     console.log(`[HUD] Connexion WebSocket vers ${wsUrl}...`);
 
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
       console.log('[HUD] Connecté au Runtime vocal.');
+      this.reconnectAttempts = 0;
       this.connBadgeEl.className = 'connected';
       this.connLabelEl.innerText = 'ONLINE';
+      // Récupérer le catalogue des modèles pour les réglages
+      this.send({ type: 'get_models' });
     };
 
     this.ws.onmessage = (event) => {
@@ -344,10 +385,12 @@ class JarvisHUD {
     };
 
     this.ws.onclose = () => {
-      console.warn('[HUD] Connexion perdue. Reconnexion dans 2s...');
+      this.reconnectAttempts++;
+      const delay = Math.min(10000, Math.round(1000 * Math.pow(1.5, Math.min(this.reconnectAttempts, 8))));
+      console.warn(`[HUD] Connexion perdue. Tentative #${this.reconnectAttempts} dans ${delay}ms...`);
       this.connBadgeEl.className = 'disconnected';
       this.connLabelEl.innerText = 'RECONNEXION';
-      setTimeout(() => this.connectWebSocket(), 2000);
+      setTimeout(() => this.connectWebSocket(), delay);
     };
   }
 
@@ -364,6 +407,10 @@ class JarvisHUD {
       case 'system_stats':
         this.cpuValueEl.innerText = `${Math.round(msg.cpu)}%`;
         this.ramValueEl.innerText = `${Math.round(msg.ram)}%`;
+        const cpuBar = document.getElementById('cpu-bar-fill');
+        if (cpuBar) cpuBar.style.width = `${Math.min(100, Math.max(0, msg.cpu))}%`;
+        const ramBar = document.getElementById('ram-bar-fill');
+        if (ramBar) ramBar.style.width = `${Math.min(100, Math.max(0, msg.ram))}%`;
         this.cpuHudEl.classList.toggle('stat-critical', msg.cpu > 90);
         this.ramHudEl.classList.toggle('stat-critical', msg.ram > 90);
         break;
@@ -403,7 +450,7 @@ class JarvisHUD {
           this.timerWidget.hide();
         } else if (msg.action === 'open_panel' && msg.params) {
           if (msg.params.panel === 'settings') this.settingsPanel.show();
-          else if (msg.params.panel === 'chat') this.chatPanel.show();
+          else if (msg.params.panel === 'chat') { if (this.chatAutoshow) this.chatPanel.show(); }
           else if (msg.params.panel === 'commands') this.commandsPanel.classList.remove('hidden');
           else if (msg.params.panel === 'orbs') this.orbsModal.show();
         } else if (msg.action === 'close_panel' && msg.params) {
@@ -425,8 +472,102 @@ class JarvisHUD {
         }
         break;
 
+      case 'model_select':
+        this.modelModal.show({
+          task: msg.task,
+          tier: msg.tier,
+          tier_label: msg.tier_label,
+          suggested: msg.suggested,
+          options: msg.options,
+        });
+        break;
+
+      case 'model_select_closed':
+        this.modelModal.close();
+        break;
+
+      case 'model_used':
+        this.chatPanel.addMessage('action', `Modèle actif : ${msg.label} (${msg.tier})`);
+        break;
+
+      case 'api_key_result':
+        this.settingsPanel.handleKeyResult(msg as any);
+        break;
+
+      case 'models_catalog':
+        this.settingsPanel.setCatalog(msg.options, msg.tiers);
+        break;
+
+      case 'provider_models':
+        this.settingsPanel.setProviderModels(msg);
+        break;
+
+      case 'mic_devices':
+        this.settingsPanel.setMicDevices(msg.devices, msg.current);
+        break;
+
+      case 'mic_result':
+        if (!msg.ok) {
+          this.chatPanel.addMessage('action', `Micro : ${msg.message || 'erreur'}`);
+          this.chatPanel.show();
+        }
+        break;
+
+      case 'tools_list':
+        this.settingsPanel.setToolsList(msg.tools, msg.default_permission);
+        break;
+
+      case 'tool_permission_result':
+        if (!msg.ok) {
+          this.chatPanel.addMessage('action', `Permission : échec pour ${msg.tool}`);
+          this.chatPanel.show();
+        }
+        break;
+
+      case 'long_response':
+        this.chatPanel.addMessage('assistant', msg.text);
+        if (this.chatAutoshow) this.chatPanel.show();
+        break;
+
+      case 'agent_thought':
+        if (msg.thought) {
+          this.statusTextEl.innerText = msg.thought.slice(0, 45);
+          this.chatPanel.addMessage('action', `💭 ${msg.thought}`);
+        }
+        break;
+
+      case 'agent_plan':
+        this.statusTextEl.innerText = "PLANIFICATION...";
+        this.chatPanel.addMessage('action', `📋 Planification : ${msg.query || 'Tâche complexe'}`);
+        break;
+
+      case 'agent_token':
+        this.chatPanel.appendStreamingToken(msg.token, msg.is_final);
+        break;
+
+      case 'tool_confirmation_request':
+        this.showToolConfirmation(msg);
+        break;
+
+      case 'task_status':
+        if (msg.status === 'completed') {
+          this.chatPanel.addMessage('action', `✓ Tâche [${msg.title}] terminée avec succès.`);
+        } else if (msg.status === 'failed') {
+          this.chatPanel.addMessage('action', `✕ Tâche [${msg.title}] a échoué : ${msg.error || 'Erreur'}`);
+        } else if (msg.status === 'cancelled') {
+          this.chatPanel.addMessage('action', `⊘ Tâche [${msg.title}] annulée.`);
+        }
+        break;
+
+      case 'routine_triggered':
+        this.chatPanel.addMessage('action', `⏰ Routine déclenchée : [${msg.name}]`);
+        break;
+
       case 'settings':
         this.settingsPanel.populate(msg.data);
+        if (msg.data.chat_autoshow !== undefined) {
+          this.chatAutoshow = msg.data.chat_autoshow !== false;
+        }
         const presetKey = msg.data.orb_preset || msg.data.orb_theme;
         if (presetKey) {
           this.orb.setPreset(presetKey);
@@ -446,13 +587,47 @@ class JarvisHUD {
     }
   }
 
+  private showToolConfirmation(msg: ToolConfirmationRequestMessage) {
+    const panel = getEl('tool-confirm-panel');
+    const overlay = getEl('tool-confirm-overlay');
+    const nameEl = getEl('tool-confirm-name');
+    const descEl = getEl('tool-confirm-desc');
+    const paramsEl = getEl('tool-confirm-params');
+    const allowBtn = getEl('tool-confirm-allow');
+    const denyBtn = getEl('tool-confirm-deny');
+
+    nameEl.innerText = msg.tool_name;
+    descEl.innerText = msg.description || "Cette action nécessite une autorisation explicite de l'utilisateur.";
+    paramsEl.innerText = JSON.stringify(msg.arguments || {}, null, 2);
+
+    panel.classList.remove('hidden');
+
+    const respond = (confirmed: boolean) => {
+      panel.classList.add('hidden');
+      allowBtn.onclick = null;
+      denyBtn.onclick = null;
+      overlay.onclick = null;
+      this.send({
+        type: 'tool_confirmation_response',
+        request_id: msg.request_id,
+        confirmed
+      });
+    };
+
+    allowBtn.onclick = () => respond(true);
+    denyBtn.onclick = () => respond(false);
+    overlay.onclick = () => respond(false);
+  }
+
   private applyState(state: AssistantStateType) {
     this.orb.setState(state);
     const labels: Record<AssistantStateType, string> = {
       idle: 'en veille',
       listening: 'écoute active...',
+      provisional: 'début de parole...',
       thinking: 'réflexion...',
-      speaking: 'synthèse vocale'
+      speaking: 'synthèse vocale',
+      barge_in: 'interruption !'
     };
     this.statusTextEl.innerText = labels[state] || state.toLowerCase();
   }

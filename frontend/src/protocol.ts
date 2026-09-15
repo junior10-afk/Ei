@@ -1,4 +1,4 @@
-export type AssistantStateType = 'idle' | 'listening' | 'thinking' | 'speaking';
+export type AssistantStateType = 'idle' | 'listening' | 'provisional' | 'thinking' | 'speaking' | 'barge_in';
 
 export interface SetStateMessage {
   type: 'set_state';
@@ -43,6 +43,142 @@ export interface SystemStatsMessage {
   ram: number;
 }
 
+export interface ModelSelectMessage {
+  type: 'model_select';
+  task: string;
+  tier: string;
+  tier_label?: string;
+  suggested?: string | null;
+  options: any[];
+}
+
+export interface ModelUsedMessage {
+  type: 'model_used';
+  model_id: string;
+  label: string;
+  tier: string;
+}
+
+export interface ModelSelectClosedMessage {
+  type: 'model_select_closed';
+  model_id: string | null;
+}
+
+export interface LongResponseMessage {
+  type: 'long_response';
+  text: string;
+  model?: string;
+}
+
+export interface ApiKeyResultMessage {
+  type: 'api_key_result';
+  provider?: string;
+  var?: string;
+  ok: boolean;
+  message?: string;
+}
+
+export interface ModelsCatalogMessage {
+  type: 'models_catalog';
+  options: any[];
+  tiers: Record<string, string>;
+  choice_mode: string;
+}
+
+export interface ProviderModelsMessage {
+  type: 'provider_models';
+  provider: string;
+  ok: boolean;
+  models: { id: string; label: string; model: string }[];
+  message?: string;
+}
+
+export interface AgentThoughtMessage {
+  type: 'agent_thought';
+  thought: string;
+  iteration?: number;
+}
+
+export interface AgentPlanMessage {
+  type: 'agent_plan';
+  status: string;
+  query?: string;
+  steps?: string[];
+}
+
+export interface AgentTokenMessage {
+  type: 'agent_token';
+  token: string;
+  is_final?: boolean;
+}
+
+export interface ToolConfirmationRequestMessage {
+  type: 'tool_confirmation_request';
+  request_id: string;
+  tool_name: string;
+  description?: string;
+  arguments: Record<string, any>;
+  danger_level: string;
+}
+
+export interface TaskStatusMessage {
+  type: 'task_status';
+  task_id: string;
+  title: string;
+  status: string;
+  progress: number;
+  result?: string;
+  error?: string;
+}
+
+export interface RoutineTriggeredMessage {
+  type: 'routine_triggered';
+  id: string;
+  name: string;
+  time?: string;
+}
+
+export interface MicDeviceInfo {
+  index: number;
+  name: string;
+  default?: boolean;
+}
+
+export interface MicDevicesMessage {
+  type: 'mic_devices';
+  devices: MicDeviceInfo[];
+  current: number | null;
+}
+
+export interface MicResultMessage {
+  type: 'mic_result';
+  ok: boolean;
+  index?: number | null;
+  message?: string;
+}
+
+export interface ToolPermissionInfo {
+  name: string;
+  label: string;
+  description: string;
+  category: string;
+  needs_confirmation: boolean;
+  permission: 'allow' | 'ask' | 'deny';
+}
+
+export interface ToolsListMessage {
+  type: 'tools_list';
+  tools: ToolPermissionInfo[];
+  default_permission: 'allow' | 'ask' | 'deny';
+}
+
+export interface ToolPermissionResultMessage {
+  type: 'tool_permission_result';
+  tool: string;
+  ok: boolean;
+  permission?: 'allow' | 'ask' | 'deny' | null;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -51,7 +187,24 @@ export type IncomingMessage =
   | MicStateMessage
   | ActionMessage
   | SettingsMessage
-  | SystemStatsMessage;
+  | SystemStatsMessage
+  | ModelSelectMessage
+  | ModelUsedMessage
+  | ModelSelectClosedMessage
+  | LongResponseMessage
+  | ApiKeyResultMessage
+  | ModelsCatalogMessage
+  | ProviderModelsMessage
+  | AgentThoughtMessage
+  | AgentPlanMessage
+  | AgentTokenMessage
+  | ToolConfirmationRequestMessage
+  | TaskStatusMessage
+  | RoutineTriggeredMessage
+  | MicDevicesMessage
+  | MicResultMessage
+  | ToolsListMessage
+  | ToolPermissionResultMessage;
 
 export interface UserInputMessage {
   type: 'user_input';
@@ -71,3 +224,10 @@ export interface UpdateSettingsMessage {
   type: 'update_settings';
   data: Record<string, any>;
 }
+
+export interface ToolConfirmationResponseMessage {
+  type: 'tool_confirmation_response';
+  request_id: string;
+  confirmed: boolean;
+}
+
