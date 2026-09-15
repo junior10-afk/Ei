@@ -14,6 +14,12 @@ tool_registry._tools["__test_perm__"] = Tool(
     requires_confirmation=True, category="test")
 try:
     prev = dict(config.get("tool_permissions", {}) or {})
+    prev.pop("__test_perm__", None)
+    prev_default = config.get("tools_default_permission", "ask")
+    perms = dict(prev)
+    perms.pop("__test_perm__", None)
+    perms.update({"__test_perm__": "ask"})
+    config.update({"tool_permissions": perms, "tools_default_permission": "ask"})
 
     # 1. Défaut = ask
     assert tool_registry.get_permission("__test_perm__") == "ask"
@@ -38,7 +44,10 @@ try:
     assert isinstance(desc, list) and len(desc) >= 10, len(desc)
     row = [d for d in desc if d["name"] == "__test_perm__"][0]
     assert row["permission"] == "allow" and row["needs_confirmation"] is True, row
-    assert set(row) == {"name", "description", "category", "needs_confirmation", "permission"}
+    assert set(row) == {"name", "label", "description", "category", "needs_confirmation", "permission"}
+    assert row["label"] == row["name"], "outil inconnu : repli sur nom brut attendu"
+    web = [d for d in desc if d["name"] == "web_search"][0]
+    assert web["label"] == "Rechercher sur le web", web
 
     # 6. Validators protocol
     from core.protocol import VALIDATORS
@@ -47,4 +56,9 @@ try:
     print("ALL_PERMISSIONS_TESTS_PASSED")
 finally:
     del tool_registry._tools["__test_perm__"]
-    config.update({"tool_permissions": prev})
+    perms = dict(config.get("tool_permissions", {}) or {})
+    perms.pop("__test_perm__", None)
+    for k, v in prev.items():
+        perms[k] = v
+    config.set("tool_permissions", perms)
+    config.set("tools_default_permission", prev_default)

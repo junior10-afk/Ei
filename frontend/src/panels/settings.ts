@@ -208,13 +208,13 @@ export class SettingsPanel {
   }
 
   public setToolsList(
-    tools: { name: string; description: string; category: string; needs_confirmation: boolean; permission: string }[],
+    tools: { name: string; label?: string; description: string; category: string; needs_confirmation: boolean; permission: string }[],
     defaultPermission: string,
   ) {
     const listEl = document.getElementById('tools-permissions-list');
     if (listEl) {
       listEl.innerHTML = '';
-      const groups: Record<string, { name: string; description: string; category: string; needs_confirmation: boolean; permission: string }[]> = {};
+      const groups: Record<string, { name: string; label?: string; description: string; category: string; needs_confirmation: boolean; permission: string }[]> = {};
       tools.forEach((t) => {
         (groups[t.category || 'general'] = groups[t.category || 'general'] || []).push(t);
       });
@@ -233,8 +233,9 @@ export class SettingsPanel {
           const label = document.createElement('span');
           label.className = 'setting-label';
           label.style.flex = '1';
-          label.textContent = `${t.name}${t.needs_confirmation ? ' ⚠️' : ''}`;
-          label.title = t.description || t.name;
+          const shown = t.label || t.name;
+          label.textContent = `${shown}${t.needs_confirmation ? ' ⚠️' : ''}`;
+          label.title = `${t.name} — ${t.description || ''}`;
           const sel = document.createElement('select');
           sel.className = 'setting-input';
           sel.dataset.tool = t.name;

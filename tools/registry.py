@@ -259,6 +259,43 @@ class ToolRegistry:
 
     PERMISSIONS = ("allow", "ask", "deny")
 
+    # Noms simples affichés dans le tableau de bord (nom technique en sous-titre)
+    TOOL_LABELS = {
+        "ha_control": "Maison connectée : agir",
+        "ha_get_state": "Maison connectée : voir l'état",
+        "write_local_file": "Créer / modifier des fichiers",
+        "read_local_document": "Lire des fichiers",
+        "list_folder": "Lister un dossier",
+        "open_folder": "Ouvrir un dossier",
+        "open_app": "Ouvrir une application",
+        "open_website": "Ouvrir un site web",
+        "open_panel": "Afficher les panneaux",
+        "close_panel": "Masquer les panneaux",
+        "web_search": "Rechercher sur le web",
+        "fetch_webpage": "Lire une page web",
+        "get_weather": "Météo",
+        "get_system_info": "Infos du système",
+        "set_system_volume": "Volume du système",
+        "set_timer": "Lancer un minuteur",
+        "cancel_timer": "Annuler un minuteur",
+        "schedule_reminder": "Programmer un rappel",
+        "rappeler": "Rappels vocaux",
+        "calculer": "Calculatrice",
+        "take_screenshot": "Capture d'écran",
+        "take_screenshot_and_analyze": "Voir et analyser l'écran",
+        "set_orb": "Changer l'orbe",
+        "clipboard_get": "Lire le presse-papiers",
+        "clipboard_set": "Copier dans le presse-papiers",
+        "execute_python_code": "Exécuter du code Python",
+        "remember_fact": "Mémoriser une info",
+        "recall_fact": "Rappeler une info",
+        "forget_fact": "Oublier une info",
+        "lire_pdf": "Lire un PDF",
+        "fusionner_pdfs": "Fusionner des PDF",
+        "diviser_pdf": "Découper un PDF",
+        "mcp_appeler": "Outils externes (MCP)",
+    }
+
     def get_permission(self, action_name: str) -> str:
         """Permission effective : réglage par outil, sinon défaut global (ask)."""
         try:
@@ -291,6 +328,7 @@ class ToolRegistry:
         """Vue tableau de bord : chaque outil + sa permission effective."""
         return [{
             "name": t.name,
+            "label": self.TOOL_LABELS.get(t.name, t.name),
             "description": t.description,
             "category": t.category,
             "needs_confirmation": bool(t.requires_confirmation),

@@ -159,6 +159,7 @@ export interface MicResultMessage {
 
 export interface ToolPermissionInfo {
   name: string;
+  label: string;
   description: string;
   category: string;
   needs_confirmation: boolean;
