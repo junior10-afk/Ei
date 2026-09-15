@@ -12,20 +12,20 @@
   "silence_duration_sec": 1.2,
   "max_phrase_sec": 15.0,
   "sound_feedback": true,
-  "orb_theme": "tachikoma",
-  "orb_animation": "equalizer",
+  "orb_theme": "tesla_coil",
+  "orb_animation": "tesla",
   "auto_listen": true,
   "model_choice_mode": "ask",
   "models": {
     "tiers": {
       "chat": "gemini/gemini-3.1-flash-lite-preview",
-      "light": "gemini/gemini-2.5-flash",
-      "heavy": "gemini/gemini-2.5-flash"
+      "light": "gemini/gemini-3.5-flash-lite",
+      "heavy": "gemini/gemini-3.8-flash"
     }
   },
   "orb_quality": "high",
-  "orb_preset": "tachikoma",
-  "chat_autoshow": true,
+  "orb_preset": "tesla_coil",
+  "chat_autoshow": false,
   "agent": {
     "fallback_rules": [
       {
