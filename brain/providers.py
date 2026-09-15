@@ -18,6 +18,18 @@ PROVIDER_KEY_ENV: Dict[str, str] = {
     "groq": "GROQ_API_KEY",
     "openai": "OPENAI_API_KEY",
     "mistral": "MISTRAL_API_KEY",
+    "xai": "XAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+# Endpoints /models des APIs compatibles OpenAI (+ customs via config custom_endpoints)
+OPENAI_COMPAT_MODELS_URLS: Dict[str, str] = {
+    "groq": "https://api.groq.com/openai/v1/models",
+    "openai": "https://api.openai.com/v1/models",
+    "mistral": "https://api.mistral.ai/v1/models",
+    "xai": "https://api.x.ai/v1/models",
+    "openrouter": "https://openrouter.ai/api/v1/models",
 }
 
 # Modèles qui ne savent pas tenir une conversation (multimodal pur / utilitaires)
@@ -38,6 +50,8 @@ def list_provider_models(provider: str) -> dict:
     try:
         if provider == "gemini":
             return _list_gemini()
+        if provider == "anthropic":
+            return _list_anthropic()
         if provider == "ollama":
             return _list_ollama()
         return _list_openai_compat(provider)
@@ -81,16 +95,22 @@ def _list_gemini() -> dict:
 def _list_openai_compat(provider: str) -> dict:
     key_env = PROVIDER_KEY_ENV.get(provider)
     if not key_env:
-        return {"ok": False, "models": [], "message": "Fournisseur inconnu."}
-    key = os.getenv(key_env, "").strip().strip('"\'')
+        # Endpoint custom déclaré en config (custom_endpoints: {nom: {base_url, key_env}})
+        custom = config.get("custom_endpoints", {}) or {}
+        entry = custom.get(provider) or {}
+        key_env = str(entry.get("key_env", "")).strip()
+        base = str(entry.get("base_url", "")).strip().rstrip("/")
+        if not key_env or not base:
+            return {"ok": False, "models": [], "message": "Fournisseur inconnu."}
+        models_url = base + "/models"
+    else:
+        models_url = OPENAI_COMPAT_MODELS_URLS.get(provider, "")
+        if not models_url:
+            return {"ok": False, "models": [], "message": "Fournisseur inconnu."}
+    key = os.getenv(key_env, "").strip().strip(chr(34) + chr(39))
     if not key:
         return {"ok": False, "models": [], "message": f"Aucune clé {provider} enregistrée."}
-    urls = {
-        "groq": "https://api.groq.com/openai/v1/models",
-        "openai": "https://api.openai.com/v1/models",
-        "mistral": "https://api.mistral.ai/v1/models",
-    }
-    res = requests.get(urls[provider], headers={"Authorization": f"Bearer {key}"}, timeout=15)
+    res = requests.get(models_url, headers={"Authorization": f"Bearer {key}"}, timeout=15)
     if res.status_code != 200:
         return {"ok": False, "models": [],
                 "message": f"HTTP {res.status_code} — clé invalide ou réseau ?"}
@@ -100,6 +120,28 @@ def _list_openai_compat(provider: str) -> dict:
         if not name or _NON_CHAT.search(name):
             continue
         models.append({"id": f"{provider}/{name}", "label": name, "model": name})
+    models.sort(key=lambda x: x["id"])
+    return {"ok": True, "models": models, "message": f"{len(models)} modèle(s) disponibles."}
+
+
+def _list_anthropic() -> dict:
+    key = (config.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
+    if not key:
+        return {"ok": False, "models": [], "message": "Aucune clé anthropic enregistrée."}
+    res = requests.get(
+        "https://api.anthropic.com/v1/models",
+        headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+        timeout=15,
+    )
+    if res.status_code != 200:
+        return {"ok": False, "models": [],
+                "message": f"HTTP {res.status_code} — clé invalide ou réseau ?"}
+    models = []
+    for m in res.json().get("data", []):
+        name = m.get("id") or ""
+        if not name or _NON_CHAT.search(name):
+            continue
+        models.append({"id": f"anthropic/{name}", "label": name, "model": name})
     models.sort(key=lambda x: x["id"])
     return {"ok": True, "models": models, "message": f"{len(models)} modèle(s) disponibles."}
 

@@ -216,7 +216,9 @@ class Dispatcher:
             else:
                 prov, mod = "gemini", light_ref or "gemini-2.5-flash"
             key_env = {"gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY",
-                       "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}.get(prov.lower(), "")
+                       "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY",
+                       "xai": "XAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY",
+                       "openrouter": "OPENROUTER_API_KEY"}.get(prov.lower(), "")
             model_info = {"provider": prov.lower(), "model": mod, "key_env": key_env,
                           "max_tokens": 64}
             ack = llm_cascade.ask_with_model(

@@ -115,6 +115,39 @@ DEFAULT_CATALOG: List[Dict[str, Any]] = [
         "description": "Tâches complexes, code de bout en bout.",
         "tiers": [TIER_HEAVY],
     },
+    {
+        "id": "xai-grok",
+        "label": "Grok 4 (xAI)",
+        "provider": "xai",
+        "model": "grok-4",
+        "key_env": "XAI_API_KEY",
+        "cost": "variable",
+        "latency": "rapide",
+        "description": "Modèle xAI, ton direct, bon en temps réel.",
+        "tiers": [TIER_CHAT, TIER_LIGHT],
+    },
+    {
+        "id": "claude-sonnet",
+        "label": "Claude Sonnet (Anthropic)",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "key_env": "ANTHROPIC_API_KEY",
+        "cost": "moyen",
+        "latency": "moyenne",
+        "description": "Excellent en code et rédaction, API native.",
+        "tiers": [TIER_CHAT, TIER_HEAVY],
+    },
+    {
+        "id": "openrouter-auto",
+        "label": "OpenRouter (multi-modèles)",
+        "provider": "openrouter",
+        "model": "openai/gpt-4o-mini",
+        "key_env": "OPENROUTER_API_KEY",
+        "cost": "variable",
+        "latency": "variable",
+        "description": "Accès à des centaines de modèles via une seule clé.",
+        "tiers": [TIER_LIGHT],
+    },
 ]
 
 DEFAULT_TIERS: Dict[str, str] = {
@@ -191,6 +224,9 @@ _KEY_ENV_BY_PROVIDER = {
     "groq": "GROQ_API_KEY",
     "openai": "OPENAI_API_KEY",
     "mistral": "MISTRAL_API_KEY",
+    "xai": "XAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
     "ollama": "",
 }
 

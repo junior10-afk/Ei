@@ -82,6 +82,8 @@ class ConfigManager:
         return self.config
 
     def get(self, key: str, default: Any = None) -> Any:
+        if key == "custom_endpoints":
+            return self.custom_endpoints
         return self.config.get(key, default)
 
     def set(self, key: str, value: Any, save: bool = True):
@@ -121,6 +123,38 @@ class ConfigManager:
         return os.getenv("MISTRAL_API_KEY", "").strip().strip('"\'')
 
     @property
+    def xai_api_key(self) -> str:
+        return os.getenv("XAI_API_KEY", "").strip().strip('"\'')
+
+    @property
+    def anthropic_api_key(self) -> str:
+        return os.getenv("ANTHROPIC_API_KEY", "").strip().strip('"\'')
+
+    @property
+    def openrouter_api_key(self) -> str:
+        return os.getenv("OPENROUTER_API_KEY", "").strip().strip(chr(34) + chr(39))
+
+    @property
+    def custom_endpoints(self) -> dict:
+        merged = {}
+        try:
+            raw = os.getenv("CUSTOM_ENDPOINTS_JSON", "").strip()
+            if raw:
+                import json as _json
+                parsed = _json.loads(raw)
+                if isinstance(parsed, dict):
+                    merged.update(parsed)
+        except Exception:
+            pass
+        try:
+            from_file = self.config.get("custom_endpoints", {}) or {}
+            if isinstance(from_file, dict):
+                merged.update(from_file)
+        except Exception:
+            pass
+        return merged
+
+    @property
     def ws_port(self) -> int:
         return int(os.getenv("WS_PORT", "8765"))
 
@@ -131,7 +165,8 @@ class ConfigManager:
     # --- Gestion des clés API dans le fichier .env --------------------------
 
     ENV_PATH = BASE_DIR / ".env"
-    API_KEY_VARS = ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "MISTRAL_API_KEY"]
+    API_KEY_VARS = ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "MISTRAL_API_KEY",
+                    "XAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"]
 
     @staticmethod
     def mask_value(value: str) -> str:

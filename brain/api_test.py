@@ -24,8 +24,27 @@ def test_api_key(provider: str) -> dict:
         if provider == "mistral":
             return _test_openai_compat("mistral", config.mistral_api_key or os.getenv("MISTRAL_API_KEY", ""),
                                         "https://api.mistral.ai/v1/models")
+        if provider == "xai":
+            return _test_openai_compat("xai", config.xai_api_key or os.getenv("XAI_API_KEY", ""),
+                                        "https://api.x.ai/v1/models")
+        if provider == "openrouter":
+            return _test_openai_compat("openrouter", config.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", ""),
+                                        "https://openrouter.ai/api/v1/models")
+        if provider == "anthropic":
+            return _test_anthropic()
         if provider == "ollama":
             return _test_ollama()
+        # Endpoint custom déclaré en config (custom_endpoints)
+        try:
+            from core.config import config as _cfg
+            custom = _cfg.get("custom_endpoints", {}) or {}
+        except Exception:
+            custom = {}
+        entry = custom.get(provider) or {}
+        base = str(entry.get("base_url", "")).strip().rstrip("/")
+        key_env = str(entry.get("key_env", "")).strip()
+        if base and key_env:
+            return _test_openai_compat(provider, os.getenv(key_env, ""), base + "/models")
         return {"provider": provider, "ok": False, "message": "Fournisseur inconnu."}
     except Exception as e:
         return {"provider": provider, "ok": False, "message": str(e)[:160]}
@@ -44,6 +63,22 @@ def _test_gemini() -> dict:
                 "message": f"HTTP {res.status_code} — clé invalide ?"}
     except Exception as e:
         return {"provider": "gemini", "ok": False, "message": str(e)[:160]}
+
+
+def _test_anthropic() -> dict:
+    key = (config.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
+    if not key:
+        return {"provider": "anthropic", "ok": False, "message": "Clé vide."}
+    try:
+        res = requests.get("https://api.anthropic.com/v1/models",
+                           headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                           timeout=10)
+        if res.status_code == 200:
+            return {"provider": "anthropic", "ok": True, "message": "Connexion réussie."}
+        return {"provider": "anthropic", "ok": False,
+                "message": f"HTTP {res.status_code} — clé invalide ?"}
+    except Exception as e:
+        return {"provider": "anthropic", "ok": False, "message": str(e)[:160]}
 
 
 def _test_openai_compat(provider: str, key: str, models_url: str) -> dict:

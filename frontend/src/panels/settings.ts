@@ -21,6 +21,9 @@ const API_PROVIDERS: ApiKeyProvider[] = [
   { var: 'GROQ_API_KEY', provider: 'groq', label: 'Groq (Llama)', help: 'console.groq.com/keys' },
   { var: 'OPENAI_API_KEY', provider: 'openai', label: 'OpenAI', help: 'platform.openai.com/api-keys' },
   { var: 'MISTRAL_API_KEY', provider: 'mistral', label: 'Mistral', help: 'console.mistral.ai/api-keys' },
+  { var: 'XAI_API_KEY', provider: 'xai', label: 'xAI (Grok)', help: 'console.x.ai' },
+  { var: 'ANTHROPIC_API_KEY', provider: 'anthropic', label: 'Anthropic (Claude)', help: 'console.anthropic.com' },
+  { var: 'OPENROUTER_API_KEY', provider: 'openrouter', label: 'OpenRouter', help: 'openrouter.ai/keys' },
 ];
 
 const TIERS: { id: string; label: string }[] = [

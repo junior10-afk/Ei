@@ -120,6 +120,71 @@ class LLMCascade:
                 self._set_cooldown("gemini", 30.0)
         return None
 
+    def _call_anthropic(self, user_text: str, system_prompt: str, model: str = "claude-sonnet-4-5",
+                        max_tokens: int = 1024, include_history: bool = True) -> Optional[str]:
+        """Claude via l'API Messages native (pas de endpoint OpenAI-compatible)."""
+        api_key = (config.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
+        if not api_key:
+            return None
+        try:
+            messages = []
+            if include_history:
+                for item in self.history[-4:]:
+                    role = "assistant" if item["role"] == "assistant" else "user"
+                    messages.append({"role": role, "content": item["text"]})
+            messages.append({"role": "user", "content": user_text})
+            res = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json",
+                },
+                json={"model": model, "max_tokens": max(max_tokens, 256),
+                      "system": system_prompt, "messages": messages},
+                timeout=45,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                parts = [b.get("text", "") for b in data.get("content", [])
+                         if b.get("type") == "text"]
+                text = "".join(parts).strip()
+                if text:
+                    return text
+                print("[LLM] Anthropic a renvoyé un contenu vide.")
+            else:
+                print(f"[LLM] Erreur anthropic ({res.status_code}): {res.text[:180]}")
+                self._set_cooldown("anthropic", 60.0)
+        except Exception as e:
+            print(f"[LLM] Exception anthropic: {str(e)[:180]}")
+            self._set_cooldown("anthropic", 60.0)
+        return None
+
+    def _openai_compat_endpoint(self, provider: str, model_info: Dict) -> tuple:
+        """Résout (base_url, api_key) pour xai/openrouter/custom. ('', '') si inconnu."""
+        builtin = {
+            "groq": "https://api.groq.com/openai/v1",
+            "openai": "https://api.openai.com/v1",
+            "mistral": "https://api.mistral.ai/v1",
+            "xai": "https://api.x.ai/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+        }
+        base_url = (model_info.get("base_url") or "").strip()
+        key_env = (model_info.get("key_env") or "").strip()
+        if not base_url:
+            base_url = builtin.get(provider, "")
+        if not key_env:
+            key_env = {"groq": "GROQ_API_KEY", "openai": "OPENAI_API_KEY",
+                       "mistral": "MISTRAL_API_KEY", "xai": "XAI_API_KEY",
+                       "openrouter": "OPENROUTER_API_KEY"}.get(provider, "")
+            custom = config.get("custom_endpoints", {}) or {}
+            if not base_url and provider in custom:
+                entry = custom.get(provider) or {}
+                base_url = str(entry.get("base_url", "")).strip()
+                key_env = str(entry.get("key_env", key_env)).strip()
+        api_key = (os.getenv(key_env, "") if key_env else "").strip()
+        return base_url, api_key
+
     def _call_openai_compatible(self, provider: str, base_url: str, api_key: str, model: str, user_text: str, system_prompt: str,
                                 max_tokens: int = 1024, include_history: bool = True) -> Optional[str]:
         api_key = (api_key or "").strip().strip('"\'')
@@ -187,19 +252,18 @@ class LLMCascade:
                 print(f"[LLM] Repli automatique de {model_name} vers gemini-2.5-flash...")
                 ans = self._call_gemini(user_text, system_prompt, model="gemini-2.5-flash", max_tokens=max_tokens,
                                         include_history=include_history)
+        elif provider == "anthropic":
+            ans = self._call_anthropic(user_text, system_prompt, model=model_name or "claude-sonnet-4-5",
+                                       max_tokens=max_tokens, include_history=include_history)
         elif provider == "ollama":
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
             ans = self._call_openai_compatible("ollama", base_url, "ollama", model_name or "llama3.2",
                                                user_text, system_prompt, include_history=include_history)
         else:
-            base_urls = {
-                "groq": "https://api.groq.com/openai/v1",
-                "openai": "https://api.openai.com/v1",
-                "mistral": "https://api.mistral.ai/v1",
-            }
-            base_url = model.get("base_url") or base_urls.get(provider)
+            base_url, api_key = self._openai_compat_endpoint(provider, model or {})
+            model_name = model_name or {"xai": "grok-4", "openrouter": "openai/gpt-4o-mini"}.get(provider, "")
             if not base_url or not api_key:
-                print(f"[LLM] Modèle {model.get('id')} indisponible (clé {key_env or 'N/A'} manquante).")
+                print(f"[LLM] Modèle {model.get('id')} indisponible (endpoint ou clé manquante).")
                 return None
             ans = self._call_openai_compatible(provider, base_url, api_key, model_name,
                                                user_text, system_prompt, max_tokens=max_tokens,
@@ -219,31 +283,41 @@ class LLMCascade:
             providers = ["ollama", "gemini", "groq"]
         else:
             providers = ["gemini", "groq", "openai", "ollama"]
+        # Fournisseurs supplémentaires : ajoutés en fin de cascade si clé présente
+        for extra, env in (("xai", "XAI_API_KEY"), ("anthropic", "ANTHROPIC_API_KEY"),
+                           ("openrouter", "OPENROUTER_API_KEY")):
+            if extra not in providers and os.getenv(env, "").strip():
+                providers.append(extra)
+        custom = config.get("custom_endpoints", {}) or {}
+        for name, entry in custom.items():
+            if name not in providers and str((entry or {}).get("key_env", "")).strip():
+                if os.getenv(str(entry.get("key_env")), "").strip():
+                    providers.append(name)
 
         for prov in providers:
             if not self._is_available(prov):
                 continue
             if prov == "gemini":
                 ans = self._call_gemini(user_text, system_prompt)
+            elif prov == "anthropic":
+                ans = self._call_anthropic(user_text, system_prompt)
             elif prov == "ollama":
                 base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
                 model = os.getenv("OLLAMA_MODEL", "llama3.2")
                 ans = self._call_openai_compatible("ollama", base_url, "ollama", model,
                                                    user_text, system_prompt)
             else:
-                base_urls = {
-                    "groq": "https://api.groq.com/openai/v1",
-                    "openai": "https://api.openai.com/v1",
-                    "mistral": "https://api.mistral.ai/v1",
-                }
-                key_envs = {"groq": "GROQ_API_KEY", "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}
+                base_url, api_key = self._openai_compat_endpoint(
+                    prov, {"key_env": {"groq": "GROQ_API_KEY", "openai": "OPENAI_API_KEY",
+                                       "mistral": "MISTRAL_API_KEY", "xai": "XAI_API_KEY",
+                                       "openrouter": "OPENROUTER_API_KEY"}.get(prov, "")})
                 default_models = {"groq": "llama-3.3-70b-versatile", "openai": "gpt-4o-mini",
-                                  "mistral": "mistral-small-latest"}
-                api_key = os.getenv(key_envs[prov], "")
-                if not api_key:
+                                  "mistral": "mistral-small-latest", "xai": "grok-4",
+                                  "openrouter": "openai/gpt-4o-mini"}
+                if not api_key or not base_url:
                     continue
-                ans = self._call_openai_compatible(prov, base_urls[prov], api_key,
-                                                   default_models[prov], user_text, system_prompt)
+                ans = self._call_openai_compatible(prov, base_url, api_key,
+                                                   default_models.get(prov, ""), user_text, system_prompt)
             if ans:
                 return ans
         return None
@@ -258,7 +332,9 @@ class LLMCascade:
 
         # Fallback gracieux si aucune clé ou indisponible
         has_any_key = any([config.gemini_api_key, config.groq_api_key,
-                           config.openai_api_key, config.mistral_api_key])
+                           config.openai_api_key, config.mistral_api_key,
+                           config.xai_api_key, config.anthropic_api_key,
+                           config.openrouter_api_key])
         if has_any_key:
             return "Les commandes locales fonctionnent, mais le modèle distant est momentanément indisponible (erreur API ou quota dépassé). Réessayez dans une minute."
         return "Toutes les commandes locales et outils fonctionnent. Pour les questions libres, veuillez renseigner une clé API dans le fichier .env."

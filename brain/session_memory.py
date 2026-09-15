@@ -119,7 +119,9 @@ class SessionMemory:
                 prov, mod = "gemini", light_ref or "gemini-2.5-flash"
             key_env = {"gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY",
                        "openai": "OPENAI_API_KEY",
-                       "mistral": "MISTRAL_API_KEY"}.get(prov.lower(), "")
+                       "mistral": "MISTRAL_API_KEY", "xai": "XAI_API_KEY",
+                       "anthropic": "ANTHROPIC_API_KEY",
+                       "openrouter": "OPENROUTER_API_KEY"}.get(prov.lower(), "")
             convo = "\n".join(
                 f"{m.get('role', '?')}: {str(m.get('text', '') or m.get('observation', ''))[:300]}"
                 for m in old_part)

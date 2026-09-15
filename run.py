@@ -89,7 +89,10 @@ async def handle_set_api_key(data: dict, websocket):
         "GEMINI_API_KEY": "gemini",
         "GROQ_API_KEY": "groq",
         "OPENAI_API_KEY": "openai",
-        "MISTRAL_API_KEY": "mistral"
+        "MISTRAL_API_KEY": "mistral",
+        "XAI_API_KEY": "xai",
+        "ANTHROPIC_API_KEY": "anthropic",
+        "OPENROUTER_API_KEY": "openrouter"
     }
     prov = prov_map.get(var)
     if prov:
