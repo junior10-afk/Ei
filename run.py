@@ -196,6 +196,30 @@ async def handle_get_tasks(data: dict, websocket):
         "tasks": task_manager.list_tasks()
     })
 
+async def handle_list_tools(data: dict, websocket):
+    """Tableau de bord permissions : outils + permission effective."""
+    from tools.registry import tool_registry
+    tools = await asyncio.get_running_loop().run_in_executor(None, tool_registry.describe_all)
+    await bus.send_to(websocket, {
+        "type": "tools_list",
+        "tools": tools,
+        "default_permission": tool_registry.get_permission("__none__"),
+    })
+
+async def handle_set_tool_permission(data: dict, websocket):
+    """Définit la permission d'un outil (allow/ask/deny)."""
+    from tools.registry import tool_registry
+    tool = data.get("tool", "")
+    permission = data.get("permission", "")
+    ok = await asyncio.get_running_loop().run_in_executor(
+        None, tool_registry.set_permission, tool, permission)
+    await bus.broadcast({
+        "type": "tool_permission_result",
+        "tool": tool,
+        "ok": ok,
+        "permission": permission if ok else None,
+    })
+
 async def handle_get_routines(data: dict, websocket):
     from core.scheduler import scheduler
     await bus.send_to(websocket, {
@@ -219,6 +243,8 @@ def setup_ws_handlers():
     bus.register_handler("tool_confirmation_response", handle_tool_confirmation_response)
     bus.register_handler("cancel_task", handle_cancel_task)
     bus.register_handler("get_tasks", handle_get_tasks)
+    bus.register_handler("list_tools", handle_list_tools)
+    bus.register_handler("set_tool_permission", handle_set_tool_permission)
     bus.register_handler("get_routines", handle_get_routines)
 
 def main():

@@ -84,6 +84,14 @@ export class SettingsPanel {
       });
     }
 
+    // Permission globale par défaut des outils
+    const toolsDefaultSelect = document.getElementById('setting-tools-default') as HTMLSelectElement;
+    if (toolsDefaultSelect) {
+      toolsDefaultSelect.addEventListener('change', () => {
+        this.onSaveCallback({ tools_default_permission: toolsDefaultSelect.value });
+      });
+    }
+
     // Aperçu dynamique en direct lors des changements de sélection
     const presetSelect = document.getElementById('setting-orb-preset') as HTMLSelectElement;
     const themeSelect = document.getElementById('setting-orb-theme') as HTMLSelectElement;
@@ -124,6 +132,7 @@ export class SettingsPanel {
     this.element.classList.remove('hidden');
     // Re-détecte les micros à chaque ouverture (casque branché/débranché)
     this.send({ type: 'list_mics' });
+    this.send({ type: 'list_tools' });
   }
 
   public hide() {
@@ -196,6 +205,59 @@ export class SettingsPanel {
     const want = current === null || current === undefined ? '' : String(current);
     const exists = Array.from(micSelect.options).some((o) => o.value === want);
     micSelect.value = exists ? want : '';
+  }
+
+  public setToolsList(
+    tools: { name: string; description: string; category: string; needs_confirmation: boolean; permission: string }[],
+    defaultPermission: string,
+  ) {
+    const listEl = document.getElementById('tools-permissions-list');
+    if (listEl) {
+      listEl.innerHTML = '';
+      const groups: Record<string, { name: string; description: string; category: string; needs_confirmation: boolean; permission: string }[]> = {};
+      tools.forEach((t) => {
+        (groups[t.category || 'general'] = groups[t.category || 'general'] || []).push(t);
+      });
+      Object.keys(groups).sort().forEach((cat) => {
+        const catEl = document.createElement('div');
+        catEl.className = 'setting-label';
+        catEl.textContent = cat;
+        catEl.style.marginTop = '8px';
+        listEl.appendChild(catEl);
+        groups[cat].forEach((t) => {
+          const row = document.createElement('div');
+          row.className = 'setting-item';
+          row.style.display = 'flex';
+          row.style.gap = '6px';
+          row.style.alignItems = 'center';
+          const label = document.createElement('span');
+          label.className = 'setting-label';
+          label.style.flex = '1';
+          label.textContent = `${t.name}${t.needs_confirmation ? ' ⚠️' : ''}`;
+          label.title = t.description || t.name;
+          const sel = document.createElement('select');
+          sel.className = 'setting-input';
+          sel.dataset.tool = t.name;
+          [['allow', '✅ Toujours'], ['ask', '❔ Demander'], ['deny', '⛔ Jamais']].forEach(([v, l]) => {
+            const opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = l;
+            sel.appendChild(opt);
+          });
+          sel.value = ['allow', 'ask', 'deny'].includes(t.permission) ? t.permission : 'ask';
+          sel.addEventListener('change', () => {
+            this.send({ type: 'set_tool_permission', tool: t.name, permission: sel.value });
+          });
+          row.appendChild(label);
+          row.appendChild(sel);
+          listEl.appendChild(row);
+        });
+      });
+    }
+    const defSel = document.getElementById('setting-tools-default') as HTMLSelectElement;
+    if (defSel && ['allow', 'ask', 'deny'].includes(defaultPermission)) {
+      defSel.value = defaultPermission;
+    }
   }
 
   private save() {

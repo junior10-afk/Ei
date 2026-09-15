@@ -52,6 +52,14 @@ class SetMicMessage(BaseModel):
     type: Literal["set_mic"] = "set_mic"
     index: Optional[Any] = None
 
+class ListToolsMessage(BaseModel):
+    type: Literal["list_tools"] = "list_tools"
+
+class SetToolPermissionMessage(BaseModel):
+    type: Literal["set_tool_permission"] = "set_tool_permission"
+    tool: str
+    permission: str
+
 class StopAudioMessage(BaseModel):
     type: Literal["stop_audio"] = "stop_audio"
 
@@ -68,5 +76,7 @@ VALIDATORS = {
     "toggle_mic": ToggleMicMessage,
     "list_mics": ListMicsMessage,
     "set_mic": SetMicMessage,
+    "list_tools": ListToolsMessage,
+    "set_tool_permission": SetToolPermissionMessage,
     "update_settings": UpdateSettingsMessage,
 }

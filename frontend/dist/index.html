@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-Ct9-AYeP.js"></script>
+    <script type="module" crossorigin src="/assets/index-7WR3KBmC.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-DB9W23qT.css">
   </head>
   <body>
@@ -477,6 +477,21 @@
               Ouvrir le journal automatiquement à chaque réponse
             </label>
           </div>
+        </div>
+
+        <div class="settings-card-group">
+          <div class="setting-item">
+            <label class="setting-label">🔐 Permissions des outils</label>
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">Par défaut (nouveaux outils) :</label>
+            <select id="setting-tools-default" class="setting-input">
+              <option value="ask">Demander à chaque fois</option>
+              <option value="allow">Toujours autoriser</option>
+              <option value="deny">Toujours refuser</option>
+            </select>
+          </div>
+          <div id="tools-permissions-list"></div>
         </div>
 
         <div class="settings-card-group">

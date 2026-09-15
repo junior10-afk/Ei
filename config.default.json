@@ -14,6 +14,7 @@
   "orb_animation": "plasma",
   "auto_listen": true,
   "chat_autoshow": true,
+  "tools_default_permission": "ask",
   "model_choice_mode": "ask",
   "models": {
     "tiers": {

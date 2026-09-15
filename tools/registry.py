@@ -215,8 +215,19 @@ class ToolRegistry:
                 "speech": f"Désolé, je ne connais pas l'action {action_name}."
             }
 
+        # Permissions utilisateur (tableau de bord) : allow > ask > deny
+        permission = self.get_permission(action_name)
+        if permission == "deny":
+            return {
+                "success": False,
+                "action": action_name,
+                "error": "Outil bloqué par tes permissions.",
+                "speech": f"L'action {action_name} est bloquée dans tes permissions."
+            }
+
         # Vérification de sécurité confirmation interactive
-        if tool.requires_confirmation and not bypass_confirmation:
+        needs_ask = tool.requires_confirmation and not bypass_confirmation
+        if needs_ask and permission != "allow":
             is_confirmed = tool_confirmation_manager.request_confirmation(
                 action_name, params, tool.description
             )
@@ -245,6 +256,47 @@ class ToolRegistry:
                 "error": str(e),
                 "speech": f"Une erreur est survenue lors de l'exécution de l'action."
             }
+
+    PERMISSIONS = ("allow", "ask", "deny")
+
+    def get_permission(self, action_name: str) -> str:
+        """Permission effective : réglage par outil, sinon défaut global (ask)."""
+        try:
+            from core.config import config
+            perms = config.get("tool_permissions", {}) or {}
+            p = str(perms.get(action_name, "")).strip().lower()
+            if p in self.PERMISSIONS:
+                return p
+            default = str(config.get("tools_default_permission", "ask")).strip().lower()
+            return default if default in self.PERMISSIONS else "ask"
+        except Exception:
+            return "ask"
+
+    def set_permission(self, action_name: str, permission: str) -> bool:
+        """Persiste la permission d'un outil. False si valeur ou outil invalide."""
+        permission = str(permission or "").strip().lower()
+        if permission not in self.PERMISSIONS or not self.get(action_name):
+            return False
+        try:
+            from core.config import config
+            perms = dict(config.get("tool_permissions", {}) or {})
+            perms[action_name] = permission
+            config.update({"tool_permissions": perms})
+            return True
+        except Exception as e:
+            print(f"[ToolRegistry] Erreur sauvegarde permission: {e}")
+            return False
+
+    def describe_all(self) -> list:
+        """Vue tableau de bord : chaque outil + sa permission effective."""
+        return [{
+            "name": t.name,
+            "description": t.description,
+            "category": t.category,
+            "needs_confirmation": bool(t.requires_confirmation),
+            "permission": self.get_permission(t.name),
+        } for t in self.list_tools()]
+
 
 tool_registry = ToolRegistry()
 

@@ -157,6 +157,27 @@ export interface MicResultMessage {
   message?: string;
 }
 
+export interface ToolPermissionInfo {
+  name: string;
+  description: string;
+  category: string;
+  needs_confirmation: boolean;
+  permission: 'allow' | 'ask' | 'deny';
+}
+
+export interface ToolsListMessage {
+  type: 'tools_list';
+  tools: ToolPermissionInfo[];
+  default_permission: 'allow' | 'ask' | 'deny';
+}
+
+export interface ToolPermissionResultMessage {
+  type: 'tool_permission_result';
+  tool: string;
+  ok: boolean;
+  permission?: 'allow' | 'ask' | 'deny' | null;
+}
+
 export type IncomingMessage =
   | SetStateMessage
   | VolumeMessage
@@ -180,7 +201,9 @@ export type IncomingMessage =
   | TaskStatusMessage
   | RoutineTriggeredMessage
   | MicDevicesMessage
-  | MicResultMessage;
+  | MicResultMessage
+  | ToolsListMessage
+  | ToolPermissionResultMessage;
 
 export interface UserInputMessage {
   type: 'user_input';

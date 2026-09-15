@@ -513,6 +513,17 @@ class JarvisHUD {
         }
         break;
 
+      case 'tools_list':
+        this.settingsPanel.setToolsList(msg.tools, msg.default_permission);
+        break;
+
+      case 'tool_permission_result':
+        if (!msg.ok) {
+          this.chatPanel.addMessage('action', `Permission : échec pour ${msg.tool}`);
+          this.chatPanel.show();
+        }
+        break;
+
       case 'long_response':
         this.chatPanel.addMessage('assistant', msg.text);
         if (this.chatAutoshow) this.chatPanel.show();
